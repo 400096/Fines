@@ -1,0 +1,41 @@
+@host = http://localhost:8080
+@token = paste-jwt-token-here
+
+### 登录（默认：admin / Admin123!）
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Admin123!"
+}
+
+### 查询考核记录
+GET {{host}}/api/assessment-records?page=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### 新增考核记录
+POST {{host}}/api/assessment-records
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "assessmentDate": "2026-09-21",
+  "departmentId": 1,
+  "personName": "张三",
+  "amount": 50,
+  "reason": "未按规定着装",
+  "remark": ""
+}
+
+### 查询部门
+GET {{host}}/api/departments
+Authorization: Bearer {{token}}
+
+### 查询收款方式
+GET {{host}}/api/payment-methods
+Authorization: Bearer {{token}}
+
+### 查询用户
+GET {{host}}/api/users?page=1&pageSize=10
+Authorization: Bearer {{token}}
