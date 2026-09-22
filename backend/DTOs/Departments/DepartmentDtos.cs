@@ -2,6 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FineManagement.Api.DTOs.Departments;
 
+public sealed class DepartmentQuery
+{
+    public string? Keyword { get; set; }
+    public bool? IsEnabled { get; set; }
+    [Range(1, int.MaxValue)] public int Page { get; set; } = 1;
+    [Range(1, 200)] public int PageSize { get; set; } = 10;
+}
+
 public class SaveDepartmentRequest
 {
     [Required, MaxLength(100)] public string Name { get; set; } = string.Empty;

@@ -10,6 +10,9 @@ import { formatDateTime } from '@/utils/format'
 const departments = ref<Department[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(10)
 const filters = reactive({ keyword: '', status: '' })
 const dialogVisible = ref(false)
 const isEditing = ref(false)
@@ -22,18 +25,28 @@ function statusValue() {
 async function loadDepartments() {
   loading.value = true
   try {
-    departments.value = await departmentApi.list({
+    const result = await departmentApi.listPaged({
       keyword: filters.keyword.trim() || undefined,
       isEnabled: statusValue(),
+      page: page.value,
+      pageSize: pageSize.value,
     })
+    departments.value = result.items
+    total.value = result.total
   } finally {
     loading.value = false
   }
 }
 
-function query() { void loadDepartments() }
+function query() { page.value = 1; void loadDepartments() }
 function reset() {
   Object.assign(filters, { keyword: '', status: '' })
+  page.value = 1
+  void loadDepartments()
+}
+function changePageSize(size: number) {
+  pageSize.value = size
+  page.value = 1
   void loadDepartments()
 }
 function openCreate() {
@@ -84,6 +97,7 @@ async function remove(row: Department) {
     await ElMessageBox.confirm(`确定删除部门“${row.name}”吗？`, '删除确认', { type: 'warning' })
     await departmentApi.remove(row.id)
     ElMessage.success('删除成功')
+    if (departments.value.length === 1 && page.value > 1) page.value--
     await loadDepartments()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') throw error
@@ -106,10 +120,10 @@ onMounted(loadDepartments)
     </div>
     <div class="management-table-wrap">
       <el-table v-loading="loading" class="management-table" :data="departments" stripe border>
-        <el-table-column type="selection" width="44" /><el-table-column prop="name" label="部门名称" sortable min-width="120" /><el-table-column prop="code" label="部门编码" sortable min-width="110" /><el-table-column prop="sortOrder" label="排序" sortable width="86" /><el-table-column label="状态" sortable min-width="100"><template #default="{ row }"><el-tag class="status-tag" :type="row.isEnabled ? 'success' : 'info'" round>{{ row.isEnabled ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column prop="manager" label="负责人" sortable min-width="110" /><el-table-column label="更新时间" sortable min-width="165"><template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template></el-table-column><el-table-column prop="remark" label="备注" min-width="145" /><el-table-column label="操作" fixed="right" width="130"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="remove(row)">删除</el-button></template></el-table-column>
+        <el-table-column type="selection" width="44" /><el-table-column prop="name" label="部门名称" sortable min-width="120" /><el-table-column prop="code" label="部门编码" sortable width="210" /><el-table-column prop="sortOrder" label="排序" sortable width="86" /><el-table-column label="状态" sortable min-width="100"><template #default="{ row }"><el-tag class="status-tag" :type="row.isEnabled ? 'success' : 'info'" round>{{ row.isEnabled ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column prop="manager" label="负责人" sortable min-width="110" /><el-table-column label="更新时间" sortable min-width="165"><template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template></el-table-column><el-table-column prop="remark" label="备注" min-width="145" /><el-table-column label="操作" fixed="right" width="130"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="remove(row)">删除</el-button></template></el-table-column>
       </el-table>
     </div>
-    <div class="management-footer"><span>共 {{ departments.length }} 条记录</span></div>
+    <div class="management-footer"><span>共 {{ total }} 条记录</span><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadDepartments" @size-change="changePageSize" /></div>
     <el-dialog v-model="dialogVisible" :title="isEditing ? '编辑部门' : '新增部门'" width="520px">
       <el-form class="editor-form" label-width="90px"><el-form-item label="部门名称" required><el-input v-model="form.name" placeholder="请输入部门名称" /></el-form-item><el-form-item label="部门编码" required><el-input v-model="form.code" placeholder="请输入部门编码" /></el-form-item><el-form-item label="负责人"><el-input v-model="form.manager" placeholder="请输入负责人" /></el-form-item><el-form-item label="排序"><el-input-number v-model="form.sortOrder" :min="0" /></el-form-item><el-form-item label="状态"><el-radio-group v-model="form.isEnabled"><el-radio :value="true">启用</el-radio><el-radio :value="false">停用</el-radio></el-radio-group></el-form-item><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" /></el-form-item></el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">确定</el-button></template>

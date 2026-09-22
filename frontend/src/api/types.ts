@@ -131,6 +131,13 @@ export interface SaveDepartment {
   remark?: string | null
 }
 
+export interface DepartmentQuery {
+  keyword?: string
+  isEnabled?: boolean
+  page?: number
+  pageSize?: number
+}
+
 export interface PaymentMethod {
   id: number
   name: string

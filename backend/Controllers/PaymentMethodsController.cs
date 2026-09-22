@@ -75,8 +75,6 @@ public class PaymentMethodsController(AppDbContext db) : ControllerBase
     {
         var entity = await db.PaymentMethods.FindAsync([id], cancellationToken);
         if (entity is null) return NotFound();
-        if (await db.AssessmentRecords.AnyAsync(x => x.PaymentMethodId == id, cancellationToken))
-            return Conflict(new { message = "该收款方式已被考核记录使用，不能删除；可改为停用" });
         db.PaymentMethods.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();

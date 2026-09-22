@@ -1,6 +1,7 @@
 using FineManagement.Api.Data;
 using FineManagement.Api.Domain.Entities;
 using FineManagement.Api.DTOs.Departments;
+using FineManagement.Api.DTOs.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,25 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
             .Select(x => new DepartmentResponse(x.Id, x.Name, x.Code, x.SortOrder, x.IsEnabled, x.Manager, x.Remark, x.UpdatedAt))
             .ToListAsync(cancellationToken);
         return Ok(items);
+    }
+
+    [HttpGet("paged")]
+    public async Task<ActionResult<PagedResult<DepartmentResponse>>> GetPagedList(
+        [FromQuery] DepartmentQuery request,
+        CancellationToken cancellationToken)
+    {
+        var query = db.Departments.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(request.Keyword))
+            query = query.Where(x => x.Name.Contains(request.Keyword) || x.Code.Contains(request.Keyword));
+        if (request.IsEnabled.HasValue) query = query.Where(x => x.IsEnabled == request.IsEnabled.Value);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query.OrderBy(x => x.SortOrder).ThenBy(x => x.Id)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .Select(x => new DepartmentResponse(x.Id, x.Name, x.Code, x.SortOrder, x.IsEnabled, x.Manager, x.Remark, x.UpdatedAt))
+            .ToListAsync(cancellationToken);
+        return Ok(new PagedResult<DepartmentResponse>(items, total, request.Page, request.PageSize));
     }
 
     [HttpGet("{id:long}")]

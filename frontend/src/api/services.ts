@@ -5,6 +5,7 @@ import type {
   CreateUser,
   DashboardResponse,
   Department,
+  DepartmentQuery,
   ExcelImportResult,
   ExcelImportConfirmResult,
   ExcelStagedRow,
@@ -72,6 +73,9 @@ export const assessmentApi = {
 export const departmentApi = {
   list: (params?: { keyword?: string; isEnabled?: boolean }) => request<Department[]>({
     method: 'GET', url: '/departments', params,
+  }),
+  listPaged: (params: DepartmentQuery) => request<PagedResult<Department>>({
+    method: 'GET', url: '/departments/paged', params,
   }),
   create: (data: SaveDepartment) => request<Department>({ method: 'POST', url: '/departments', data }),
   update: (id: number, data: SaveDepartment) => request<Department>({ method: 'PUT', url: `/departments/${id}`, data }),
