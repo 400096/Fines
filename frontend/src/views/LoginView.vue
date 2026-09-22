@@ -26,11 +26,11 @@ function refreshCaptcha() {
   form.captcha = ''
 
   const characterNodes = captchaCode.value.split('').map((character, index) => {
-    const x = 24 + index * 27
-    const y = randomBetween(31, 40)
-    const rotation = randomBetween(-18, 18)
+    const x = 16 + index * 28
+    const y = randomBetween(32, 37)
+    const rotation = randomBetween(-10, 10)
     const colors = ['#075e4c', '#0b8c64', '#315c81', '#875126']
-    return `<text x="${x}" y="${y}" transform="rotate(${rotation} ${x} ${y})" fill="${colors[index]}" font-size="25" font-weight="700" font-family="Arial, sans-serif">${character}</text>`
+    return `<text x="${x}" y="${y}" transform="rotate(${rotation} ${x} ${y})" text-anchor="middle" fill="${colors[index]}" font-size="23" font-weight="700" font-family="Arial, sans-serif">${character}</text>`
   }).join('')
   const noiseLines = Array.from({ length: 5 }, (_, index) => {
     const colors = ['#63c9a8', '#93b8cf', '#d7a86e', '#8fd6c0', '#8aaebf']
