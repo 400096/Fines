@@ -3,11 +3,15 @@ import { Document, Download, Plus, Refresh, Search, Upload } from '@element-plus
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { assessmentApi, departmentApi, paymentMethodApi } from '@/api/services'
 import type { AssessmentRecord, AssessmentRecordQuery, AssessmentStatus, Department, ExcelStagedRow, ExcelImportFailedRow, ExcelImportResult, PaymentMethod } from '@/api/types'
 import PageTitle from '@/components/PageTitle.vue'
 import { todayString } from '@/utils/format'
+import { consumePendingImportFile } from '@/utils/importTransfer'
 
+const route = useRoute()
+const router = useRouter()
 const filters = reactive({ dates: [] as string[], departmentId: undefined as number | undefined, name: '', status: '' })
 const records = ref<AssessmentRecord[]>([])
 const departments = ref<Department[]>([])
@@ -326,11 +330,7 @@ async function exportExcel() {
     exporting.value = false
   }
 }
-async function importExcel(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+async function processImportFile(file: File) {
   importing.value = true
   try {
     const result = await assessmentApi.importExcel(file)
@@ -344,6 +344,13 @@ async function importExcel(event: Event) {
   } finally {
     importing.value = false
   }
+}
+
+async function importExcel(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) await processImportFile(file)
 }
 
 async function confirmImport() {
@@ -391,7 +398,27 @@ function beforeCloseImport(done: () => void) {
 }
 
 onMounted(async () => {
+  const routeDate = typeof route.query.date === 'string' ? route.query.date : ''
+  const routeStatus = typeof route.query.status === 'string' ? route.query.status : ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(routeDate)) filters.dates = [routeDate, routeDate]
+  if (routeStatus === 'Pending' || routeStatus === 'Completed') filters.status = routeStatus
+
   await Promise.all([loadOptions(), loadRecords()])
+
+  const action = typeof route.query.action === 'string' ? route.query.action : ''
+  if (action === 'create') {
+    openCreate()
+  } else if (action === 'import') {
+    const transferredFile = consumePendingImportFile()
+    if (transferredFile) await processImportFile(transferredFile)
+    else fileInput.value?.click()
+  }
+
+  if (action) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.action
+    await router.replace({ path: route.path, query: nextQuery })
+  }
 })
 </script>
 

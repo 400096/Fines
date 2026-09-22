@@ -156,7 +156,7 @@ VALUES
         'admin',
         'AQAAAAIAAYagAAAAEMVl5+s8T58wK0CkHXOazS3jFV6S3RJJJ+lydQ0I8xEvxt9L7icpedKqpsSgGnZ9og==',
         '管理员',
-        '13900006688',
+        '17863654727',
         '超级管理员',
         1
     );

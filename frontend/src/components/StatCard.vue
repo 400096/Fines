@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-withDefaults(defineProps<{ label: string; value: string; unit: string; icon: Component; tone?: 'green' | 'blue' | 'orange'; trend?: string }>(), { tone: 'green', trend: '+12%' })
+const props = withDefaults(defineProps<{ label: string; value: string; unit: string; icon: Component; tone?: 'green' | 'blue' | 'orange'; trend?: string; clickable?: boolean }>(), { tone: 'green', trend: '+12%', clickable: false })
+const emit = defineEmits<{ click: [] }>()
+function activate() { if (props.clickable) emit('click') }
 </script>
 
 <template>
-  <article class="stat-card card">
+  <article class="stat-card card" :class="{ 'is-clickable': clickable }" :role="clickable ? 'button' : undefined" :tabindex="clickable ? 0 : undefined" @click="activate" @keydown.enter="activate" @keydown.space.prevent="activate">
     <div class="stat-card__icon" :class="`is-${tone}`"><component :is="icon" /></div>
     <div class="stat-card__body"><span>{{ label }}</span><div><strong>{{ value }}</strong><small>{{ unit }}</small></div><p>较上月 <em>{{ trend }}</em> ↗</p></div>
     <div class="stat-card__bars"><i /><i /><i /><i /></div>
@@ -13,6 +15,7 @@ withDefaults(defineProps<{ label: string; value: string; unit: string; icon: Com
 
 <style scoped>
 .stat-card { position: relative; display: flex; align-items: center; gap: 16px; min-height: 124px; padding: 20px; overflow: hidden; }
+.stat-card.is-clickable { cursor: pointer; transition: transform .18s, box-shadow .18s; }.stat-card.is-clickable:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(20, 91, 75, .12); }
 .stat-card__icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 16px; font-size: 29px; }
 .is-green { color: #00975e; background: #def8ed; }.is-blue { color: #2d7ff0; background: #e4efff; }.is-orange { color: #f68c22; background: #fff0df; }
 .stat-card__body { position: relative; z-index: 1; display: grid; gap: 5px; }.stat-card__body > span { color: var(--text-secondary); font-size: 14px; }

@@ -32,7 +32,7 @@ public static class DbInitializer
             {
                 Username = "admin",
                 Name = "管理员",
-                Phone = "13900006688",
+                Phone = "17863654727",
                 Role = "超级管理员",
                 IsEnabled = true,
                 CreatedAt = now,
