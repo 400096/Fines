@@ -37,8 +37,9 @@ http.interceptors.response.use(
 
       if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
         clearStoredSession()
-        if (window.location.pathname !== '/login') {
-          window.location.assign(`/login?redirect=${encodeURIComponent(window.location.pathname)}`)
+        const currentRoute = window.location.hash.slice(1) || '/dashboard'
+        if (!window.location.hash.startsWith('#/login')) {
+          window.location.assign(`${import.meta.env.BASE_URL}#/login?redirect=${encodeURIComponent(currentRoute)}`)
         }
         message = '登录已失效，请重新登录'
       }

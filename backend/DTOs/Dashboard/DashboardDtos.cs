@@ -17,7 +17,10 @@ public sealed record DashboardDistributionItem(string Name, decimal Amount, int 
 
 public sealed record DashboardRecentRecord(
     long Id,
+    AssessmentDateType AssessmentDateType,
     DateOnly AssessmentDate,
+    DateOnly? AssessmentEndDate,
+    DateOnly DetailDate,
     string DepartmentName,
     string PersonName,
     decimal Amount,

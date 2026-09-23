@@ -1,4 +1,5 @@
 export type AssessmentStatus = 'Pending' | 'Completed'
+export type AssessmentDateType = 'Fixed' | 'Range'
 
 export interface LoginResponse {
   token: string
@@ -18,7 +19,10 @@ export interface PagedResult<T> {
 
 export interface AssessmentRecord {
   id: number
+  assessmentDateType: AssessmentDateType
   assessmentDate: string
+  assessmentEndDate: string | null
+  detailDate: string
   departmentId: number
   departmentName: string
   personName: string
@@ -36,17 +40,23 @@ export interface AssessmentRecord {
 export interface AssessmentRecordQuery {
   dateFrom?: string
   dateTo?: string
+  detailDateFrom?: string
+  detailDateTo?: string
   departmentId?: number
+  departmentIds?: number[]
   name?: string
   status?: AssessmentStatus
-  sortBy?: 'assessmentDate' | 'departmentName' | 'personName' | 'amount'
+  sortBy?: 'assessmentDate' | 'detailDate' | 'departmentName' | 'personName' | 'amount'
   sortOrder?: 'ascending' | 'descending'
   page?: number
   pageSize?: number
 }
 
 export interface SaveAssessmentRecord {
+  assessmentDateType: AssessmentDateType
   assessmentDate: string
+  assessmentEndDate?: string | null
+  detailDate: string
   departmentId: number
   personName: string
   amount: number
@@ -59,7 +69,10 @@ export interface UpdateAssessmentRecord extends SaveAssessmentRecord {
 }
 
 export interface SaveStagedAssessmentRecord {
+  assessmentDateType: AssessmentDateType
   assessmentDate: string
+  assessmentEndDate?: string | null
+  detailDate: string
   departmentId?: number | null
   departmentName: string
   personName: string
@@ -82,7 +95,10 @@ export interface ExcelImportResult {
 export interface ExcelStagedRow {
   stagingId: number
   rowNumber: number
+  assessmentDateType: AssessmentDateType
   assessmentDate: string
+  assessmentEndDate: string | null
+  detailDate: string
   departmentId: number
   departmentName: string
   personName: string
@@ -103,6 +119,7 @@ export interface ExcelImportFailedRow {
   rowNumber: number
   message: string
   assessmentDate: string | null
+  detailDate: string | null
   departmentName: string | null
   personName: string | null
   amountText: string | null
@@ -204,7 +221,10 @@ export interface DashboardResponse {
   distribution: Array<{ name: string; amount: number; count: number }>
   recentRecords: Array<{
     id: number
+    assessmentDateType: AssessmentDateType
     assessmentDate: string
+    assessmentEndDate: string | null
+    detailDate: string
     departmentName: string
     personName: string
     amount: number

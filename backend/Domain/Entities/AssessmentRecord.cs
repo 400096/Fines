@@ -5,7 +5,10 @@ namespace FineManagement.Api.Domain.Entities;
 public class AssessmentRecord : ISoftDeletable
 {
     public long Id { get; set; }
+    public AssessmentDateType AssessmentDateType { get; set; } = AssessmentDateType.Fixed;
     public DateOnly AssessmentDate { get; set; }
+    public DateOnly? AssessmentEndDate { get; set; }
+    public DateOnly DetailDate { get; set; }
     public long DepartmentId { get; set; }
     public Department Department { get; set; } = null!;
     public string PersonName { get; set; } = string.Empty;

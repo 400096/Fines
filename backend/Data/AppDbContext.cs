@@ -1,5 +1,6 @@
 using FineManagement.Api.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace FineManagement.Api.Data;
 
@@ -57,7 +58,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.ToTable("AssessmentRecords");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired();
             entity.Property(x => x.AssessmentDate)
+                .HasConversion(
+                    date => date.ToDateTime(TimeOnly.MinValue),
+                    date => DateOnly.FromDateTime(date))
+                .HasColumnType("date")
+                .IsRequired();
+            entity.Property(x => x.AssessmentEndDate)
+                .HasConversion(new ValueConverter<DateOnly?, DateTime?>(
+                    date => date.HasValue ? date.Value.ToDateTime(TimeOnly.MinValue) : null,
+                    date => date.HasValue ? DateOnly.FromDateTime(date.Value) : null))
+                .HasColumnType("date");
+            entity.Property(x => x.DetailDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))
@@ -69,6 +82,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.Remark).HasMaxLength(500);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             entity.HasIndex(x => x.AssessmentDate);
+            entity.HasIndex(x => x.DetailDate);
             entity.HasIndex(x => new { x.DepartmentId, x.AssessmentDate });
             entity.HasIndex(x => x.IsDeleted);
             entity.HasQueryFilter(x => !x.IsDeleted);
@@ -96,7 +110,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.ToTable("AssessmentImportRows");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired();
             entity.Property(x => x.AssessmentDate)
+                .HasConversion(
+                    date => date.ToDateTime(TimeOnly.MinValue),
+                    date => DateOnly.FromDateTime(date))
+                .HasColumnType("date")
+                .IsRequired();
+            entity.Property(x => x.AssessmentEndDate)
+                .HasConversion(new ValueConverter<DateOnly?, DateTime?>(
+                    date => date.HasValue ? date.Value.ToDateTime(TimeOnly.MinValue) : null,
+                    date => date.HasValue ? DateOnly.FromDateTime(date.Value) : null))
+                .HasColumnType("date");
+            entity.Property(x => x.DetailDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))

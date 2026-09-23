@@ -22,19 +22,19 @@ public class DashboardController(AppDbContext db) : ControllerBase
         var trendStart = today.AddDays(-6);
 
         var todayCount = await db.AssessmentRecords.CountAsync(
-            x => x.AssessmentDate == today, cancellationToken);
+            x => x.DetailDate == today, cancellationToken);
         var monthCount = await db.AssessmentRecords.CountAsync(
-            x => x.AssessmentDate >= monthStart && x.AssessmentDate <= today, cancellationToken);
+            x => x.DetailDate >= monthStart && x.DetailDate <= today, cancellationToken);
         var monthAmount = await db.AssessmentRecords
-            .Where(x => x.AssessmentDate >= monthStart && x.AssessmentDate <= today)
+            .Where(x => x.DetailDate >= monthStart && x.DetailDate <= today)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
         var previousMonthAmount = await db.AssessmentRecords
-            .Where(x => x.AssessmentDate >= previousMonthStart && x.AssessmentDate < monthStart)
+            .Where(x => x.DetailDate >= previousMonthStart && x.DetailDate < monthStart)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
         var pendingCount = await db.AssessmentRecords.CountAsync(
             x => x.Status == AssessmentStatus.Pending, cancellationToken);
         var monthPersonNames = await db.AssessmentRecords
-            .Where(x => x.AssessmentDate >= monthStart && x.AssessmentDate <= today)
+            .Where(x => x.DetailDate >= monthStart && x.DetailDate <= today)
             .Select(x => x.PersonName)
             .ToListAsync(cancellationToken);
         var personCount = monthPersonNames
@@ -42,7 +42,7 @@ public class DashboardController(AppDbContext db) : ControllerBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
         var departmentCount = await db.AssessmentRecords
-            .Where(x => x.AssessmentDate >= monthStart && x.AssessmentDate <= today)
+            .Where(x => x.DetailDate >= monthStart && x.DetailDate <= today)
             .Select(x => x.DepartmentId)
             .Distinct()
             .CountAsync(cancellationToken);
@@ -52,8 +52,8 @@ public class DashboardController(AppDbContext db) : ControllerBase
             : Math.Round((monthAmount - previousMonthAmount) / previousMonthAmount * 100, 1);
 
         var trendRows = await db.AssessmentRecords.AsNoTracking()
-            .Where(x => x.AssessmentDate >= trendStart && x.AssessmentDate <= today)
-            .GroupBy(x => x.AssessmentDate)
+            .Where(x => x.DetailDate >= trendStart && x.DetailDate <= today)
+            .GroupBy(x => x.DetailDate)
             .Select(x => new DashboardTrendPoint(x.Key, x.Sum(record => record.Amount)))
             .ToListAsync(cancellationToken);
         var trendAmounts = trendRows.ToDictionary(x => x.Date, x => x.Amount);
@@ -65,7 +65,7 @@ public class DashboardController(AppDbContext db) : ControllerBase
             .ToList();
 
         var distributionRows = await db.AssessmentRecords.AsNoTracking()
-            .Where(x => x.AssessmentDate >= monthStart && x.AssessmentDate <= today)
+            .Where(x => x.DetailDate >= monthStart && x.DetailDate <= today)
             .GroupBy(x => x.Reason)
             .Select(x => new
             {
@@ -81,13 +81,16 @@ public class DashboardController(AppDbContext db) : ControllerBase
             .ToList();
 
         var recentRows = await db.AssessmentRecords.AsNoTracking()
-            .OrderByDescending(x => x.AssessmentDate)
+            .OrderByDescending(x => x.DetailDate)
             .ThenByDescending(x => x.Id)
             .Take(5)
             .Select(x => new
             {
                 x.Id,
+                x.AssessmentDateType,
                 x.AssessmentDate,
+                x.AssessmentEndDate,
+                x.DetailDate,
                 DepartmentName = x.Department.Name,
                 x.PersonName,
                 x.Amount,
@@ -99,7 +102,10 @@ public class DashboardController(AppDbContext db) : ControllerBase
         var recentRecords = recentRows
             .Select(x => new DashboardRecentRecord(
                 x.Id,
+                x.AssessmentDateType,
                 x.AssessmentDate,
+                x.AssessmentEndDate,
+                x.DetailDate,
                 x.DepartmentName,
                 x.PersonName,
                 x.Amount,

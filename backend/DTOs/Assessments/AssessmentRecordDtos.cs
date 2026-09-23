@@ -7,10 +7,13 @@ public sealed class AssessmentRecordQuery
 {
     public DateOnly? DateFrom { get; set; }
     public DateOnly? DateTo { get; set; }
+    public DateOnly? DetailDateFrom { get; set; }
+    public DateOnly? DetailDateTo { get; set; }
     public long? DepartmentId { get; set; }
+    public List<long> DepartmentIds { get; set; } = [];
     public string? Name { get; set; }
     public AssessmentStatus? Status { get; set; }
-    [RegularExpression("^(assessmentDate|departmentName|personName|amount)$")]
+    [RegularExpression("^(assessmentDate|detailDate|departmentName|personName|amount)$")]
     public string SortBy { get; set; } = "assessmentDate";
     [RegularExpression("^(ascending|descending)$")]
     public string SortOrder { get; set; } = "descending";
@@ -20,7 +23,10 @@ public sealed class AssessmentRecordQuery
 
 public class CreateAssessmentRecordRequest
 {
+    [Required] public AssessmentDateType AssessmentDateType { get; set; } = AssessmentDateType.Fixed;
     [Required] public DateOnly AssessmentDate { get; set; }
+    public DateOnly? AssessmentEndDate { get; set; }
+    [Required] public DateOnly DetailDate { get; set; }
     [Range(1, long.MaxValue)] public long DepartmentId { get; set; }
     [Required, MaxLength(50)] public string PersonName { get; set; } = string.Empty;
     [Range(typeof(decimal), "0.01", "999999999")] public decimal Amount { get; set; }
@@ -35,7 +41,10 @@ public sealed class UpdateAssessmentRecordRequest : CreateAssessmentRecordReques
 
 public sealed class SaveAssessmentImportRowRequest
 {
+    [Required] public AssessmentDateType AssessmentDateType { get; set; } = AssessmentDateType.Fixed;
     [Required] public DateOnly AssessmentDate { get; set; }
+    public DateOnly? AssessmentEndDate { get; set; }
+    [Required] public DateOnly DetailDate { get; set; }
     public long? DepartmentId { get; set; }
     [Required, MaxLength(100)] public string DepartmentName { get; set; } = string.Empty;
     [Required, MaxLength(50)] public string PersonName { get; set; } = string.Empty;
@@ -47,7 +56,10 @@ public sealed class SaveAssessmentImportRowRequest
 
 public sealed record AssessmentRecordResponse(
     long Id,
+    AssessmentDateType AssessmentDateType,
     DateOnly AssessmentDate,
+    DateOnly? AssessmentEndDate,
+    DateOnly DetailDate,
     long DepartmentId,
     string DepartmentName,
     string PersonName,
@@ -64,7 +76,10 @@ public sealed record AssessmentRecordResponse(
 public sealed record ExcelStagedRow(
     long StagingId,
     int RowNumber,
+    AssessmentDateType AssessmentDateType,
     DateOnly AssessmentDate,
+    DateOnly? AssessmentEndDate,
+    DateOnly DetailDate,
     long DepartmentId,
     string DepartmentName,
     string PersonName,
@@ -79,6 +94,7 @@ public sealed record ExcelImportFailedRow(
     int RowNumber,
     string Message,
     string? AssessmentDate,
+    string? DetailDate,
     string? DepartmentName,
     string? PersonName,
     string? AmountText,

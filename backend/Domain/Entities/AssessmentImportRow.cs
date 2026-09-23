@@ -1,3 +1,5 @@
+using FineManagement.Api.Domain.Enums;
+
 namespace FineManagement.Api.Domain.Entities;
 
 public class AssessmentImportRow : ISoftDeletable
@@ -6,7 +8,10 @@ public class AssessmentImportRow : ISoftDeletable
     public long BatchId { get; set; }
     public AssessmentImportBatch Batch { get; set; } = null!;
     public int SourceRowNumber { get; set; }
+    public AssessmentDateType AssessmentDateType { get; set; } = AssessmentDateType.Fixed;
     public DateOnly AssessmentDate { get; set; }
+    public DateOnly? AssessmentEndDate { get; set; }
+    public DateOnly DetailDate { get; set; }
     public long? DepartmentId { get; set; }
     public Department? Department { get; set; }
     public string DepartmentName { get; set; } = string.Empty;

@@ -12,6 +12,7 @@ public static class DbInitializer
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
         await EnsureImportStagingSchemaAsync(db);
+        await EnsureAssessmentDateSchemaAsync(db);
         await EnsureSoftDeleteSchemaAsync(db);
 
         var now = DateTime.UtcNow;
@@ -113,7 +114,10 @@ public static class DbInitializer
                 `Id` BIGINT NOT NULL AUTO_INCREMENT,
                 `BatchId` BIGINT NOT NULL,
                 `SourceRowNumber` INT NOT NULL DEFAULT 0,
+                `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed',
                 `AssessmentDate` DATE NOT NULL,
+                `AssessmentEndDate` DATE NULL,
+                `DetailDate` DATE NOT NULL,
                 `DepartmentId` BIGINT NULL,
                 `DepartmentName` VARCHAR(100) NOT NULL,
                 `PersonName` VARCHAR(50) NOT NULL,
@@ -135,6 +139,58 @@ public static class DbInitializer
                 KEY `IX_AssessmentImportRows_BatchId_IsDeleted` (`BatchId`, `IsDeleted`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """);
+    }
+
+    private static async Task EnsureAssessmentDateSchemaAsync(AppDbContext db)
+    {
+        var tables = new[] { "AssessmentRecords", "AssessmentImportRows" };
+        await db.Database.OpenConnectionAsync();
+        try
+        {
+            var connection = db.Database.GetDbConnection();
+            foreach (var table in tables)
+            {
+                if (!await ColumnExistsAsync(connection, table, "AssessmentDateType"))
+                {
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' AFTER `AssessmentDate`";
+                    await command.ExecuteNonQueryAsync();
+                }
+
+                if (!await ColumnExistsAsync(connection, table, "AssessmentEndDate"))
+                {
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentEndDate` DATE NULL AFTER `AssessmentDate`";
+                    await command.ExecuteNonQueryAsync();
+                }
+
+                if (!await ColumnExistsAsync(connection, table, "DetailDate"))
+                {
+                    await using var addColumn = connection.CreateCommand();
+                    addColumn.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `DetailDate` DATE NULL AFTER `AssessmentEndDate`";
+                    await addColumn.ExecuteNonQueryAsync();
+
+                    await using var backfill = connection.CreateCommand();
+                    backfill.CommandText = $"UPDATE `{table}` SET `DetailDate` = `AssessmentDate` WHERE `DetailDate` IS NULL";
+                    await backfill.ExecuteNonQueryAsync();
+
+                    await using var makeRequired = connection.CreateCommand();
+                    makeRequired.CommandText = $"ALTER TABLE `{table}` MODIFY COLUMN `DetailDate` DATE NOT NULL";
+                    await makeRequired.ExecuteNonQueryAsync();
+                }
+            }
+
+            if (!await IndexExistsAsync(connection, "AssessmentRecords", "IX_AssessmentRecords_DetailDate"))
+            {
+                await using var addIndex = connection.CreateCommand();
+                addIndex.CommandText = "CREATE INDEX `IX_AssessmentRecords_DetailDate` ON `AssessmentRecords` (`DetailDate`)";
+                await addIndex.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
     }
 
     private static async Task<bool> ColumnExistsAsync(System.Data.Common.DbConnection connection, string table, string column)

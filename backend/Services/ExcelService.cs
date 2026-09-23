@@ -62,7 +62,10 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 {
                     Batch = batch,
                     SourceRowNumber = row.RowNumber,
+                    AssessmentDateType = row.AssessmentDateType,
                     AssessmentDate = row.AssessmentDate,
+                    AssessmentEndDate = row.AssessmentEndDate,
+                    DetailDate = row.DetailDate,
                     DepartmentId = department is { IsDeleted: false } ? department.Id : null,
                     DepartmentName = department?.Name ?? row.DepartmentKey.Trim(),
                     PersonName = row.PersonName,
@@ -82,7 +85,8 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 failedRows.Add(new ExcelImportFailedRow(
                     row.RowNumber,
                     ex.Message,
-                    row.AssessmentDate.ToString("yyyy-MM-dd"),
+                    FormatAssessmentDate(row.AssessmentDate, row.AssessmentEndDate),
+                    row.DetailDate.ToString("yyyy-MM-dd"),
                     row.DepartmentKey,
                     row.PersonName,
                     AssessmentAmountFormatter.Format(row.Amount, row.PersonName),
@@ -96,7 +100,10 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         var stagedRows = stagedRecords.Select(item => new ExcelStagedRow(
             item.Record.Id,
             item.Source.RowNumber,
+            item.Source.AssessmentDateType,
             item.Source.AssessmentDate,
+            item.Source.AssessmentEndDate,
+            item.Source.DetailDate,
             item.Record.DepartmentId ?? 0,
             item.Record.DepartmentName,
             item.Source.PersonName,
@@ -186,7 +193,10 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
 
             db.AssessmentRecords.Add(new AssessmentRecord
             {
+                AssessmentDateType = row.AssessmentDateType,
                 AssessmentDate = row.AssessmentDate,
+                AssessmentEndDate = row.AssessmentEndDate,
+                DetailDate = row.DetailDate,
                 Department = department,
                 PersonName = row.PersonName,
                 Amount = row.Amount,
@@ -215,6 +225,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         error.RowNumber,
         error.Message,
         error.AssessmentDateText,
+        error.DetailDateText,
         error.DepartmentKey,
         error.PersonName,
         error.AmountText,
@@ -249,9 +260,13 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
             .Include(x => x.PaymentMethod)
             .AsQueryable();
 
-        if (query.DateFrom.HasValue) recordsQuery = recordsQuery.Where(x => x.AssessmentDate >= query.DateFrom.Value);
+        if (query.DateFrom.HasValue) recordsQuery = recordsQuery.Where(x => (x.AssessmentEndDate ?? x.AssessmentDate) >= query.DateFrom.Value);
         if (query.DateTo.HasValue) recordsQuery = recordsQuery.Where(x => x.AssessmentDate <= query.DateTo.Value);
-        if (query.DepartmentId.HasValue) recordsQuery = recordsQuery.Where(x => x.DepartmentId == query.DepartmentId.Value);
+        if (query.DetailDateFrom.HasValue) recordsQuery = recordsQuery.Where(x => x.DetailDate >= query.DetailDateFrom.Value);
+        if (query.DetailDateTo.HasValue) recordsQuery = recordsQuery.Where(x => x.DetailDate <= query.DetailDateTo.Value);
+        var departmentIds = query.DepartmentIds.Where(id => id > 0).Distinct().ToArray();
+        if (departmentIds.Length > 0) recordsQuery = recordsQuery.Where(x => departmentIds.Contains(x.DepartmentId));
+        else if (query.DepartmentId.HasValue) recordsQuery = recordsQuery.Where(x => x.DepartmentId == query.DepartmentId.Value);
         if (!string.IsNullOrWhiteSpace(query.Name)) recordsQuery = recordsQuery.Where(x => x.PersonName.Contains(query.Name));
         if (query.Status.HasValue) recordsQuery = recordsQuery.Where(x => x.Status == query.Status.Value);
 
@@ -261,17 +276,25 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         using var workbook = new XLWorkbook();
         var worksheet = workbook.AddWorksheet("考核记录");
         var headers = new[] { "日期", "部门", "姓名", "金额/元", "事由", "备注" };
-        for (var i = 0; i < headers.Length; i++) worksheet.Cell(1, i + 1).Value = headers[i];
+        var filteredDetailDate = GetSingleDetailDateFilter(query);
+        var headerRow = filteredDetailDate.HasValue ? 2 : 1;
+        var firstDataRow = headerRow + 1;
+        for (var i = 0; i < headers.Length; i++) worksheet.Cell(headerRow, i + 1).Value = headers[i];
 
         DateOnly? previousDate = null;
         long? previousDepartmentId = null;
-        var departmentGroupStartRow = 2;
+        var departmentGroupStartRow = firstDataRow;
         for (var i = 0; i < records.Count; i++)
         {
-            var row = i + 2;
+            var row = i + firstDataRow;
             var item = records[i];
-            worksheet.Cell(row, 1).Value = item.AssessmentDate.ToDateTime(TimeOnly.MinValue);
-            worksheet.Cell(row, 1).Style.DateFormat.Format = "yyyy/m/d";
+            if (item.AssessmentEndDate.HasValue)
+                worksheet.Cell(row, 1).Value = FormatAssessmentDate(item.AssessmentDate, item.AssessmentEndDate);
+            else
+            {
+                worksheet.Cell(row, 1).Value = item.AssessmentDate.ToDateTime(TimeOnly.MinValue);
+                worksheet.Cell(row, 1).Style.DateFormat.Format = "yyyy/m/d";
+            }
             if (previousDate != item.AssessmentDate || previousDepartmentId != item.DepartmentId)
             {
                 if (i > 0) MergeDepartmentCells(worksheet, departmentGroupStartRow, row - 1);
@@ -289,9 +312,10 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
             previousDepartmentId = item.DepartmentId;
         }
         if (records.Count > 0)
-            MergeDepartmentCells(worksheet, departmentGroupStartRow, records.Count + 1);
+            MergeDepartmentCells(worksheet, departmentGroupStartRow, firstDataRow + records.Count - 1);
 
-        var usedRange = worksheet.Range(1, 1, Math.Max(records.Count + 1, 2), headers.Length);
+        var lastUsedRow = records.Count > 0 ? firstDataRow + records.Count - 1 : headerRow;
+        var usedRange = worksheet.Range(1, 1, lastUsedRow, headers.Length);
         usedRange.Style.Font.FontName = "华文楷体";
         usedRange.Style.Font.FontSize = 11;
         usedRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -301,22 +325,37 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         usedRange.Style.Border.OutsideBorderColor = XLColor.Black;
         usedRange.Style.Border.InsideBorderColor = XLColor.Black;
 
-        var headerRange = worksheet.Range(1, 1, 1, headers.Length);
+        var headerRange = worksheet.Range(headerRow, 1, headerRow, headers.Length);
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Font.FontSize = 12;
         headerRange.Style.Fill.BackgroundColor = XLColor.White;
-        worksheet.Row(1).Height = 28;
+        worksheet.Row(headerRow).Height = 28;
         if (records.Count > 0)
-            worksheet.Rows(2, records.Count + 1).Height = 24;
+            worksheet.Rows(firstDataRow, firstDataRow + records.Count - 1).Height = 24;
 
-        worksheet.Column(1).Width = 14;
+        if (filteredDetailDate.HasValue)
+        {
+            var titleRowRange = worksheet.Range(1, 1, 1, headers.Length);
+            titleRowRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#E2F3EA");
+            worksheet.Range(1, 2, 1, headers.Length).Merge();
+            worksheet.Cell(1, 2).Value = $"{filteredDetailDate.Value.Month}.{filteredDetailDate.Value.Day}考核明细";
+            var titleRange = worksheet.Range(1, 2, 1, headers.Length);
+            titleRange.Style.Font.FontName = "华文楷体";
+            titleRange.Style.Font.FontSize = 9;
+            titleRange.Style.Font.Bold = true;
+            titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            titleRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            worksheet.Row(1).Height = 17;
+        }
+
+        worksheet.Column(1).Width = 20;
         worksheet.Column(2).Width = 18;
         worksheet.Column(3).Width = 32;
         worksheet.Column(4).Width = 20;
         worksheet.Column(5).Width = 42;
         worksheet.Column(6).Width = 24;
         worksheet.Columns(3, 6).Style.Alignment.WrapText = true;
-        worksheet.SheetView.FreezeRows(1);
+        worksheet.SheetView.FreezeRows(headerRow);
         worksheet.ShowGridLines = true;
         worksheet.PageSetup.PageOrientation = XLPageOrientation.Portrait;
         worksheet.PageSetup.PaperSize = XLPaperSize.A4Paper;
@@ -344,5 +383,17 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         if (string.IsNullOrWhiteSpace(remark)) return $"{paymentMethodName}已收";
         if (remark.Contains(paymentMethodName, StringComparison.OrdinalIgnoreCase)) return remark;
         return $"{remark}；{paymentMethodName}已收";
+    }
+
+    private static string FormatAssessmentDate(DateOnly start, DateOnly? end) =>
+        end.HasValue
+            ? $"{start:yyyy/M/d}-{(start.Year == end.Value.Year && start.Month == end.Value.Month ? end.Value.Day.ToString() : end.Value.ToString("M/d"))}"
+            : start.ToString("yyyy/M/d");
+
+    private static DateOnly? GetSingleDetailDateFilter(AssessmentRecordQuery query)
+    {
+        if (query.DetailDateFrom.HasValue && query.DetailDateTo.HasValue)
+            return query.DetailDateFrom.Value == query.DetailDateTo.Value ? query.DetailDateFrom.Value : null;
+        return query.DetailDateFrom ?? query.DetailDateTo;
     }
 }

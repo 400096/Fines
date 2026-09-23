@@ -13,6 +13,9 @@ public static class AssessmentRecordQueryExtensions
 
         return query.SortBy switch
         {
+            "detailDate" => descending
+                ? records.OrderByDescending(x => x.DetailDate).ThenByDescending(x => x.Id)
+                : records.OrderBy(x => x.DetailDate).ThenBy(x => x.Id),
             "departmentName" => descending
                 ? records.OrderByDescending(x => x.Department.Name).ThenByDescending(x => x.Id)
                 : records.OrderBy(x => x.Department.Name).ThenBy(x => x.Id),

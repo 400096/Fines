@@ -30,7 +30,7 @@ export const authApi = {
 
 export const assessmentApi = {
   list: (params: AssessmentRecordQuery) => request<PagedResult<AssessmentRecord>>({
-    method: 'GET', url: '/assessment-records', params,
+    method: 'GET', url: '/assessment-records', params, paramsSerializer: { indexes: null },
   }),
   create: (data: SaveAssessmentRecord) => request<AssessmentRecord>({
     method: 'POST', url: '/assessment-records', data,
@@ -60,7 +60,11 @@ export const assessmentApi = {
     method: 'DELETE', url: `/assessment-records/import/${batchId}`,
   }),
   exportExcel: async (params: AssessmentRecordQuery) => {
-    const response = await http.get<Blob>('/assessment-records/export', { params, responseType: 'blob' })
+    const response = await http.get<Blob>('/assessment-records/export', {
+      params,
+      paramsSerializer: { indexes: null },
+      responseType: 'blob',
+    })
     const disposition = String(response.headers['content-disposition'] ?? '')
     const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
     return {

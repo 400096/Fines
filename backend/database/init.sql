@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS `Users`
 CREATE TABLE IF NOT EXISTS `AssessmentRecords`
 (
     `Id`              BIGINT NOT NULL AUTO_INCREMENT,
+    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed',
     `AssessmentDate`  DATE NOT NULL,
+    `AssessmentEndDate` DATE NULL,
+    `DetailDate`      DATE NOT NULL,
     `DepartmentId`    BIGINT NOT NULL,
     `PersonName`      VARCHAR(50) NOT NULL,
     `Amount`          DECIMAL(18,2) NOT NULL,
@@ -90,6 +93,7 @@ CREATE TABLE IF NOT EXISTS `AssessmentRecords`
     CONSTRAINT `FK_AssessmentRecords_Users`
         FOREIGN KEY (`CreatedByUserId`) REFERENCES `Users` (`Id`) ON DELETE SET NULL,
     KEY `IX_AssessmentRecords_AssessmentDate` (`AssessmentDate`),
+    KEY `IX_AssessmentRecords_DetailDate` (`DetailDate`),
     KEY `IX_AssessmentRecords_DepartmentId_AssessmentDate` (`DepartmentId`, `AssessmentDate`),
     KEY `IX_AssessmentRecords_Status` (`Status`),
     KEY `IX_AssessmentRecords_IsDeleted` (`IsDeleted`)
@@ -117,7 +121,10 @@ CREATE TABLE IF NOT EXISTS `AssessmentImportRows`
     `Id`               BIGINT NOT NULL AUTO_INCREMENT,
     `BatchId`          BIGINT NOT NULL,
     `SourceRowNumber`  INT NOT NULL DEFAULT 0,
+    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed',
     `AssessmentDate`   DATE NOT NULL,
+    `AssessmentEndDate` DATE NULL,
+    `DetailDate`       DATE NOT NULL,
     `DepartmentId`     BIGINT NULL,
     `DepartmentName`   VARCHAR(100) NOT NULL,
     `PersonName`       VARCHAR(50) NOT NULL,

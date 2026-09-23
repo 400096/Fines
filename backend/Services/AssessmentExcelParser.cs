@@ -2,12 +2,16 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using ExcelDataReader;
+using FineManagement.Api.Domain.Enums;
 
 namespace FineManagement.Api.Services;
 
 public sealed record ParsedAssessmentRow(
     int RowNumber,
+    AssessmentDateType AssessmentDateType,
     DateOnly AssessmentDate,
+    DateOnly? AssessmentEndDate,
+    DateOnly DetailDate,
     string DepartmentKey,
     string PersonName,
     decimal Amount,
@@ -23,6 +27,7 @@ public sealed record ParsedAssessmentError(
     int RowNumber,
     string Message,
     string? AssessmentDateText = null,
+    string? DetailDateText = null,
     string? DepartmentKey = null,
     string? PersonName = null,
     string? AmountText = null,
@@ -32,6 +37,26 @@ public sealed record ParsedAssessmentError(
 
 public static partial class AssessmentExcelParser
 {
+    private sealed record ParsedAssessmentDate(
+        AssessmentDateType Type,
+        DateOnly Start,
+        DateOnly? End);
+
+    private sealed record DetailDateParts(int Month, int Day)
+    {
+        public DateOnly Resolve(int year)
+        {
+            try
+            {
+                return new DateOnly(year, Month, Day);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                throw new InvalidDataException("考核明细日期格式不正确");
+            }
+        }
+    }
+
     private sealed record HeaderMap(
         int Date,
         int Department,
@@ -60,6 +85,7 @@ public static partial class AssessmentExcelParser
                 HeaderMap? header = null;
                 var rowNumber = 0;
                 var currentDepartment = string.Empty;
+                DetailDateParts? currentDetailDate = null;
 
                 while (reader.Read())
                 {
@@ -68,11 +94,20 @@ public static partial class AssessmentExcelParser
                         .Select(reader.GetValue)
                         .ToArray();
 
-                    if (header is null)
+                    if (TryParseDetailDateHeader(values, out var sectionDetailDate))
                     {
-                        if (TryCreateHeaderMap(values, out header)) continue;
+                        currentDetailDate = sectionDetailDate;
+                        currentDepartment = string.Empty;
                         continue;
                     }
+
+                    if (TryCreateHeaderMap(values, out var detectedHeader))
+                    {
+                        header = detectedHeader;
+                        continue;
+                    }
+
+                    if (header is null) continue;
 
                     if (values.All(IsEmpty)) continue;
 
@@ -97,9 +132,14 @@ public static partial class AssessmentExcelParser
                             ? GetText(GetValue(values, header.PaymentMethod.Value))
                             : string.Empty;
 
+                        var assessmentDate = ParseAssessmentDate(GetValue(values, header.Date));
+                        var detailDate = currentDetailDate?.Resolve(assessmentDate.Start.Year) ?? assessmentDate.Start;
                         rows.Add(new ParsedAssessmentRow(
                             rowNumber,
-                            ParseDate(GetValue(values, header.Date)),
+                            assessmentDate.Type,
+                            assessmentDate.Start,
+                            assessmentDate.End,
+                            detailDate,
                             currentDepartment,
                             personName,
                             ParseAmount(GetValue(values, header.Amount)),
@@ -113,6 +153,7 @@ public static partial class AssessmentExcelParser
                             rowNumber,
                             ex.Message,
                             GetNullableText(GetValue(values, header.Date)),
+                            currentDetailDate is null ? null : $"{currentDetailDate.Month}.{currentDetailDate.Day}",
                             GetNullableText(GetValue(values, header.Department)) ?? GetNullableText(currentDepartment),
                             GetNullableText(GetValue(values, header.PersonName)),
                             GetNullableText(GetValue(values, header.Amount)),
@@ -200,14 +241,67 @@ public static partial class AssessmentExcelParser
 
     private static string NormalizeHeader(string value) => WhitespaceRegex().Replace(value, string.Empty);
 
-    private static DateOnly ParseDate(object? value)
+    private static bool TryParseDetailDateHeader(IReadOnlyList<object?> values, out DetailDateParts? detailDate)
     {
-        if (value is DateTime dateTime) return DateOnly.FromDateTime(dateTime);
-        if (value is double serial) return DateOnly.FromDateTime(DateTime.FromOADate(serial));
-        var text = GetText(value);
-        if (DateOnly.TryParse(text, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out var date)) return date;
+        foreach (var value in values)
+        {
+            var match = DetailDateHeaderRegex().Match(GetText(value));
+            if (!match.Success) continue;
+            detailDate = new DetailDateParts(
+                int.Parse(match.Groups["month"].Value, CultureInfo.InvariantCulture),
+                int.Parse(match.Groups["day"].Value, CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        detailDate = null;
+        return false;
+    }
+
+    private static ParsedAssessmentDate ParseAssessmentDate(object? value)
+    {
+        if (value is DateTime dateTime)
+        {
+            var date = DateOnly.FromDateTime(dateTime);
+            return new ParsedAssessmentDate(AssessmentDateType.Fixed, date, null);
+        }
+        if (value is double serial)
+        {
+            var date = DateOnly.FromDateTime(DateTime.FromOADate(serial));
+            return new ParsedAssessmentDate(AssessmentDateType.Fixed, date, null);
+        }
+
+        var text = GetText(value).Replace('－', '-').Replace('—', '-');
+        var rangeMatch = AssessmentDateRangeRegex().Match(text);
+        if (rangeMatch.Success)
+        {
+            var year = int.Parse(rangeMatch.Groups["year"].Value, CultureInfo.InvariantCulture);
+            var startMonth = int.Parse(rangeMatch.Groups["month"].Value, CultureInfo.InvariantCulture);
+            var startDay = int.Parse(rangeMatch.Groups["startDay"].Value, CultureInfo.InvariantCulture);
+            var endMonthText = rangeMatch.Groups["endMonth"].Value;
+            var endMonth = string.IsNullOrWhiteSpace(endMonthText)
+                ? startMonth
+                : int.Parse(endMonthText, CultureInfo.InvariantCulture);
+            var endDay = int.Parse(rangeMatch.Groups["endDay"].Value, CultureInfo.InvariantCulture);
+            try
+            {
+                var start = new DateOnly(year, startMonth, startDay);
+                var end = new DateOnly(year, endMonth, endDay);
+                if (end < start) throw new InvalidDataException("考核日期区间的结束日期不能早于开始日期");
+                return new ParsedAssessmentDate(AssessmentDateType.Range, start, end);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                throw new InvalidDataException("考核日期格式不正确");
+            }
+        }
+
+        if (AssessmentDateRangeIntentRegex().IsMatch(text))
+            throw new InvalidDataException("考核日期区间格式不正确，请使用如 2026/9/4-6 的格式");
+
+        if (DateOnly.TryParse(text, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out var fixedDate))
+            return new ParsedAssessmentDate(AssessmentDateType.Fixed, fixedDate, null);
         if (DateTime.TryParse(text, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out dateTime))
-            return DateOnly.FromDateTime(dateTime);
+            return new ParsedAssessmentDate(AssessmentDateType.Fixed, DateOnly.FromDateTime(dateTime), null);
         throw new InvalidDataException("考核日期格式不正确");
     }
 
@@ -237,4 +331,13 @@ public static partial class AssessmentExcelParser
 
     [GeneratedRegex(@"\d+(?:\.\d+)?", RegexOptions.CultureInvariant)]
     private static partial Regex AmountRegex();
+
+    [GeneratedRegex(@"^\s*(?<month>\d{1,2})\s*[./月]\s*(?<day>\d{1,2})\s*日?\s*考核明细\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex DetailDateHeaderRegex();
+
+    [GeneratedRegex(@"^\s*(?<year>\d{4})\s*[/.-]\s*(?<month>\d{1,2})\s*[/.-]\s*(?<startDay>\d{1,2})\s*日?\s*[-~～至]\s*(?:(?<endMonth>\d{1,2})\s*[/.-]\s*)?(?<endDay>\d{1,2})\s*日?\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex AssessmentDateRangeRegex();
+
+    [GeneratedRegex(@"^\s*\d{4}\s*[/.-]\s*\d{1,2}\s*[/.-]\s*\d{1,2}\s*日?\s*[-~～至]", RegexOptions.CultureInvariant)]
+    private static partial Regex AssessmentDateRangeIntentRegex();
 }

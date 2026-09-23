@@ -49,13 +49,18 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     [HttpPost]
     public async Task<ActionResult<AssessmentRecordResponse>> Create(CreateAssessmentRecordRequest request, CancellationToken cancellationToken)
     {
+        var dateValidation = ValidateDates(request.AssessmentDateType, request.AssessmentDate, request.AssessmentEndDate, request.DetailDate);
+        if (dateValidation is not null) return BadRequest(new { message = dateValidation });
         var department = await db.Departments.SingleOrDefaultAsync(x => x.Id == request.DepartmentId && x.IsEnabled, cancellationToken);
         if (department is null) return BadRequest(new { message = "部门不存在或已停用" });
 
         var now = DateTime.UtcNow;
         var entity = new AssessmentRecord
         {
+            AssessmentDateType = request.AssessmentDateType,
             AssessmentDate = request.AssessmentDate,
+            AssessmentEndDate = NormalizeEndDate(request.AssessmentDateType, request.AssessmentEndDate),
+            DetailDate = request.DetailDate,
             DepartmentId = request.DepartmentId,
             Department = department,
             PersonName = request.PersonName.Trim(),
@@ -75,6 +80,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     [HttpPut("{id:long}")]
     public async Task<ActionResult<AssessmentRecordResponse>> Update(long id, UpdateAssessmentRecordRequest request, CancellationToken cancellationToken)
     {
+        var dateValidation = ValidateDates(request.AssessmentDateType, request.AssessmentDate, request.AssessmentEndDate, request.DetailDate);
+        if (dateValidation is not null) return BadRequest(new { message = dateValidation });
         var entity = await db.AssessmentRecords
             .Include(x => x.Department)
             .Include(x => x.PaymentMethod)
@@ -91,7 +98,10 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             if (paymentMethod is null) return BadRequest(new { message = "收款方式不存在或已停用" });
         }
 
+        entity.AssessmentDateType = request.AssessmentDateType;
         entity.AssessmentDate = request.AssessmentDate;
+        entity.AssessmentEndDate = NormalizeEndDate(request.AssessmentDateType, request.AssessmentEndDate);
+        entity.DetailDate = request.DetailDate;
         entity.DepartmentId = department.Id;
         entity.Department = department;
         entity.PersonName = request.PersonName.Trim();
@@ -136,6 +146,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     {
         var batch = await FindPendingBatchAsync(batchId, cancellationToken);
         if (batch is null) return NotFound(new { message = "导入批次不存在或已处理" });
+        var dateValidation = ValidateDates(request.AssessmentDateType, request.AssessmentDate, request.AssessmentEndDate, request.DetailDate);
+        if (dateValidation is not null) return BadRequest(new { message = dateValidation });
 
         Department? department = null;
         if (request.DepartmentId.HasValue && request.DepartmentId.Value > 0)
@@ -160,7 +172,10 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         {
             BatchId = batch.Id,
             SourceRowNumber = 0,
+            AssessmentDateType = request.AssessmentDateType,
             AssessmentDate = request.AssessmentDate,
+            AssessmentEndDate = NormalizeEndDate(request.AssessmentDateType, request.AssessmentEndDate),
+            DetailDate = request.DetailDate,
             DepartmentId = department?.Id,
             Department = department,
             DepartmentName = departmentName,
@@ -193,6 +208,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             .SingleOrDefaultAsync(x => x.Id == rowId && x.BatchId == batchId, cancellationToken);
         if (row is null || row.Batch.Status != AssessmentImportStatus.Pending || !CanAccessBatch(row.Batch))
             return NotFound(new { message = "暂存记录不存在或导入批次已处理" });
+        var dateValidation = ValidateDates(request.AssessmentDateType, request.AssessmentDate, request.AssessmentEndDate, request.DetailDate);
+        if (dateValidation is not null) return BadRequest(new { message = dateValidation });
 
         Department? department = null;
         if (request.DepartmentId.HasValue && request.DepartmentId.Value > 0)
@@ -212,7 +229,10 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             if (paymentMethod is null) return BadRequest(new { message = "收款方式不存在或已停用" });
         }
 
+        row.AssessmentDateType = request.AssessmentDateType;
         row.AssessmentDate = request.AssessmentDate;
+        row.AssessmentEndDate = NormalizeEndDate(request.AssessmentDateType, request.AssessmentEndDate);
+        row.DetailDate = request.DetailDate;
         row.DepartmentId = department?.Id;
         row.Department = department;
         row.DepartmentName = departmentName;
@@ -290,16 +310,21 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
 
     private static IQueryable<AssessmentRecord> ApplyFilters(IQueryable<AssessmentRecord> records, AssessmentRecordQuery query)
     {
-        if (query.DateFrom.HasValue) records = records.Where(x => x.AssessmentDate >= query.DateFrom.Value);
+        if (query.DateFrom.HasValue) records = records.Where(x => (x.AssessmentEndDate ?? x.AssessmentDate) >= query.DateFrom.Value);
         if (query.DateTo.HasValue) records = records.Where(x => x.AssessmentDate <= query.DateTo.Value);
-        if (query.DepartmentId.HasValue) records = records.Where(x => x.DepartmentId == query.DepartmentId.Value);
+        if (query.DetailDateFrom.HasValue) records = records.Where(x => x.DetailDate >= query.DetailDateFrom.Value);
+        if (query.DetailDateTo.HasValue) records = records.Where(x => x.DetailDate <= query.DetailDateTo.Value);
+        var departmentIds = query.DepartmentIds.Where(id => id > 0).Distinct().ToArray();
+        if (departmentIds.Length > 0) records = records.Where(x => departmentIds.Contains(x.DepartmentId));
+        else if (query.DepartmentId.HasValue) records = records.Where(x => x.DepartmentId == query.DepartmentId.Value);
         if (!string.IsNullOrWhiteSpace(query.Name)) records = records.Where(x => x.PersonName.Contains(query.Name));
         if (query.Status.HasValue) records = records.Where(x => x.Status == query.Status.Value);
         return records;
     }
 
     private static AssessmentRecordResponse ToResponse(AssessmentRecord x) => new(
-        x.Id, x.AssessmentDate, x.DepartmentId, x.Department.Name, x.PersonName, x.Amount,
+        x.Id, x.AssessmentDateType, x.AssessmentDate, x.AssessmentEndDate, x.DetailDate,
+        x.DepartmentId, x.Department.Name, x.PersonName, x.Amount,
         AssessmentAmountFormatter.Format(x.Amount, x.PersonName), x.Reason, x.Remark, x.Status,
         x.PaymentMethodId, x.PaymentMethod?.Name, x.CreatedAt, x.UpdatedAt);
 
@@ -316,7 +341,10 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     private static ExcelStagedRow ToStagedRow(AssessmentImportRow row) => new(
         row.Id,
         row.SourceRowNumber,
+        row.AssessmentDateType,
         row.AssessmentDate,
+        row.AssessmentEndDate,
+        row.DetailDate,
         row.DepartmentId ?? 0,
         row.DepartmentName,
         row.PersonName,
@@ -326,4 +354,24 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         row.Remark,
         row.PaymentMethodId,
         row.PaymentMethod?.Name);
+
+    private static string? ValidateDates(
+        AssessmentDateType type,
+        DateOnly start,
+        DateOnly? end,
+        DateOnly detailDate)
+    {
+        if (!Enum.IsDefined(type)) return "考核日期类型不正确";
+        if (start == default) return "请选择考核日期";
+        if (detailDate == default) return "请选择考核明细日期";
+        if (type == AssessmentDateType.Range)
+        {
+            if (!end.HasValue) return "请选择考核日期区间的结束日期";
+            if (end.Value < start) return "考核日期区间的结束日期不能早于开始日期";
+        }
+        return null;
+    }
+
+    private static DateOnly? NormalizeEndDate(AssessmentDateType type, DateOnly? end) =>
+        type == AssessmentDateType.Range ? end : null;
 }
