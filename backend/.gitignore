@@ -5,3 +5,5 @@ obj/
 *.suo
 appsettings.Local.json
 uploads/
+deploy
+backdist
