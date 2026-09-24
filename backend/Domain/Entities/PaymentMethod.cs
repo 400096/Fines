@@ -1,5 +1,6 @@
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>考核记录完成时选择的收款方式。</summary>
 public class PaymentMethod : ISoftDeletable
 {
     public long Id { get; set; }

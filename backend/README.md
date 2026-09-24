@@ -14,6 +14,8 @@ ASP.NET Core 8 Web API，使用 EF Core + MySQL、JWT Bearer、ClosedXML 和 Swa
    - 执行 `mysql -u root -p < database/init.sql`；
    - 保持 `Database:InitializeOnStartup=true`，应用首次启动时自动建表并写入基础数据。
 
+`init.sql` 已包含所有表和字段注释。已有数据库可额外执行 `mysql -u root -p fine_management < database/add_comments.sql` 补充注释，该脚本不会清空业务数据。
+
 系统不会预置部门。部门可以在部门管理中手动新增，也会在导入考核记录时按 Excel 中的部门名称自动创建。
 3. 执行：
 

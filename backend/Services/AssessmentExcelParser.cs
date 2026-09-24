@@ -35,6 +35,9 @@ public sealed record ParsedAssessmentError(
     string? Remark = null,
     string? PaymentMethodText = null);
 
+/// <summary>
+/// 解析 xls/xlsx/xlsm 考核模板，支持合并部门单元格、固定日期、日期区间和“X.X考核明细”分组行。
+/// </summary>
 public static partial class AssessmentExcelParser
 {
     private sealed record ParsedAssessmentDate(
@@ -66,6 +69,7 @@ public static partial class AssessmentExcelParser
         int? Remark,
         int? PaymentMethod);
 
+    /// <summary>读取第一个有效工作表并返回可导入行和逐行识别错误。</summary>
     public static AssessmentExcelParseResult Parse(Stream stream)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -94,6 +98,7 @@ public static partial class AssessmentExcelParser
                         .Select(reader.GetValue)
                         .ToArray();
 
+                    // “9.7考核明细”是后续记录的明细日期上下文，本身不作为数据行导入。
                     if (TryParseDetailDateHeader(values, out var sectionDetailDate))
                     {
                         currentDetailDate = sectionDetailDate;
@@ -113,6 +118,7 @@ public static partial class AssessmentExcelParser
 
                     try
                     {
+                        // 模板纵向合并部门单元格时，空白单元格沿用最近一次出现的部门。
                         var departmentText = GetText(GetValue(values, header.Department));
                         if (!string.IsNullOrWhiteSpace(departmentText)) currentDepartment = departmentText;
                         if (string.IsNullOrWhiteSpace(currentDepartment))
@@ -259,6 +265,7 @@ public static partial class AssessmentExcelParser
 
     private static ParsedAssessmentDate ParseAssessmentDate(object? value)
     {
+        // Excel 原生日期和 OA 序列值都视为固定日期。
         if (value is DateTime dateTime)
         {
             var date = DateOnly.FromDateTime(dateTime);
@@ -271,6 +278,7 @@ public static partial class AssessmentExcelParser
         }
 
         var text = GetText(value).Replace('－', '-').Replace('—', '-');
+        // 支持 2026/9/4-6 和 2026/9/4-9/6 两种日期区间写法。
         var rangeMatch = AssessmentDateRangeRegex().Match(text);
         if (rangeMatch.Success)
         {

@@ -8,11 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>首页汇总指标、趋势图、事由占比和最近记录接口。</summary>
 [ApiController]
 [Authorize]
 [Route("api/dashboard")]
 public class DashboardController(AppDbContext db) : ControllerBase
 {
+    /// <summary>获取首页所需的全部统计数据。</summary>
     [HttpGet]
     public async Task<ActionResult<DashboardResponse>> Get(CancellationToken cancellationToken)
     {

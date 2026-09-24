@@ -2,6 +2,7 @@ using FineManagement.Api.Domain.Enums;
 
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>一次 Excel 导入产生的待确认批次。</summary>
 public class AssessmentImportBatch : ISoftDeletable
 {
     public long Id { get; set; }

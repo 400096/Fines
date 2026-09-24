@@ -22,12 +22,14 @@ import type {
   UserQuery,
 } from './types'
 
+// 登录接口。
 export const authApi = {
   login: (username: string, password: string) => request<LoginResponse>({
     method: 'POST', url: '/auth/login', data: { username, password },
   }),
 }
 
+// 考核记录接口，包含正式记录、Excel 暂存确认以及导出功能。
 export const assessmentApi = {
   list: (params: AssessmentRecordQuery) => request<PagedResult<AssessmentRecord>>({
     method: 'GET', url: '/assessment-records', params, paramsSerializer: { indexes: null },
@@ -74,6 +76,7 @@ export const assessmentApi = {
   },
 }
 
+// 部门管理接口，列表接口同时供下拉选择和分页管理页面使用。
 export const departmentApi = {
   list: (params?: { keyword?: string; isEnabled?: boolean }) => request<Department[]>({
     method: 'GET', url: '/departments', params,
@@ -86,6 +89,7 @@ export const departmentApi = {
   remove: (id: number) => request<void>({ method: 'DELETE', url: `/departments/${id}` }),
 }
 
+// 收款方式管理接口。
 export const paymentMethodApi = {
   list: (params?: { keyword?: string; isEnabled?: boolean }) => request<PaymentMethod[]>({
     method: 'GET', url: '/payment-methods', params,
@@ -95,6 +99,7 @@ export const paymentMethodApi = {
   remove: (id: number) => request<void>({ method: 'DELETE', url: `/payment-methods/${id}` }),
 }
 
+// 系统用户管理接口。
 export const userApi = {
   list: (params: UserQuery) => request<PagedResult<SystemUser>>({ method: 'GET', url: '/users', params }),
   create: (data: CreateUser) => request<SystemUser>({ method: 'POST', url: '/users', data }),
@@ -102,6 +107,7 @@ export const userApi = {
   remove: (id: number) => request<void>({ method: 'DELETE', url: `/users/${id}` }),
 }
 
+// 首页汇总接口。
 export const dashboardApi = {
   get: () => request<DashboardResponse>({ method: 'GET', url: '/dashboard' }),
 }

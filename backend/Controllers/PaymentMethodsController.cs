@@ -7,11 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>收款方式查询和维护接口。</summary>
 [ApiController]
 [Authorize]
 [Route("api/payment-methods")]
 public class PaymentMethodsController(AppDbContext db) : ControllerBase
 {
+    /// <summary>查询收款方式列表。</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PaymentMethodResponse>>> GetList(
         [FromQuery] string? keyword,
@@ -27,6 +29,7 @@ public class PaymentMethodsController(AppDbContext db) : ControllerBase
         return Ok(items);
     }
 
+    /// <summary>获取单个收款方式。</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<PaymentMethodResponse>> GetById(long id, CancellationToken cancellationToken)
     {
@@ -36,6 +39,7 @@ public class PaymentMethodsController(AppDbContext db) : ControllerBase
         return item is null ? NotFound() : Ok(item);
     }
 
+    /// <summary>新增收款方式。</summary>
     [HttpPost]
     public async Task<ActionResult<PaymentMethodResponse>> Create(SavePaymentMethodRequest request, CancellationToken cancellationToken)
     {
@@ -53,6 +57,7 @@ public class PaymentMethodsController(AppDbContext db) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, ToResponse(entity));
     }
 
+    /// <summary>编辑收款方式。</summary>
     [HttpPut("{id:long}")]
     public async Task<ActionResult<PaymentMethodResponse>> Update(long id, SavePaymentMethodRequest request, CancellationToken cancellationToken)
     {
@@ -70,6 +75,7 @@ public class PaymentMethodsController(AppDbContext db) : ControllerBase
         return Ok(ToResponse(entity));
     }
 
+    /// <summary>逻辑删除收款方式。</summary>
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

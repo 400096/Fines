@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 收款方式管理：维护考核完成时可选择的收款渠道。
 import { CreditCard, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'

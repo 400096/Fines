@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 部门管理：分页查询部门，并维护名称、编码、负责人、排序和启停状态。
 import { OfficeBuilding, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'

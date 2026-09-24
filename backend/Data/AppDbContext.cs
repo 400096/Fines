@@ -1,9 +1,13 @@
 using FineManagement.Api.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace FineManagement.Api.Data;
 
+/// <summary>
+/// 应用数据库上下文。集中定义表结构、字段约束、关系、索引及逻辑删除过滤器。
+/// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<AssessmentRecord> AssessmentRecords => Set<AssessmentRecord>();
@@ -17,12 +21,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         modelBuilder.Entity<Department>(entity =>
         {
-            entity.ToTable("Departments");
+            entity.ToTable("Departments", table => table.HasComment("部门信息表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Code).HasMaxLength(30).IsRequired();
-            entity.Property(x => x.Manager).HasMaxLength(50);
-            entity.Property(x => x.Remark).HasMaxLength(300);
+            entity.Property(x => x.Id).HasComment("部门主键");
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired().HasComment("部门名称");
+            entity.Property(x => x.Code).HasMaxLength(30).IsRequired().HasComment("部门编码");
+            entity.Property(x => x.SortOrder).HasComment("显示排序，数值越小越靠前");
+            entity.Property(x => x.IsEnabled).HasComment("是否启用");
+            entity.Property(x => x.Manager).HasMaxLength(50).HasComment("部门负责人");
+            entity.Property(x => x.Remark).HasMaxLength(300).HasComment("备注");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.Code).IsUnique();
             entity.HasIndex(x => x.IsDeleted);
@@ -31,10 +39,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<PaymentMethod>(entity =>
         {
-            entity.ToTable("PaymentMethods");
+            entity.ToTable("PaymentMethods", table => table.HasComment("收款方式表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.Description).HasMaxLength(300);
+            entity.Property(x => x.Id).HasComment("收款方式主键");
+            entity.Property(x => x.Name).HasMaxLength(50).IsRequired().HasComment("收款方式名称");
+            entity.Property(x => x.SortOrder).HasComment("显示排序，数值越小越靠前");
+            entity.Property(x => x.IsEnabled).HasComment("是否启用");
+            entity.Property(x => x.Description).HasMaxLength(300).HasComment("收款方式说明");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.IsDeleted);
             entity.HasQueryFilter(x => !x.IsDeleted);
@@ -42,13 +54,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<AppUser>(entity =>
         {
-            entity.ToTable("Users");
+            entity.ToTable("Users", table => table.HasComment("系统用户表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Username).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
-            entity.Property(x => x.Name).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.Phone).HasMaxLength(30);
-            entity.Property(x => x.Role).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Id).HasComment("用户主键");
+            entity.Property(x => x.Username).HasMaxLength(50).IsRequired().HasComment("登录用户名");
+            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired().HasComment("ASP.NET Identity 密码哈希");
+            entity.Property(x => x.Name).HasMaxLength(50).IsRequired().HasComment("用户姓名");
+            entity.Property(x => x.Phone).HasMaxLength(30).HasComment("联系电话");
+            entity.Property(x => x.Role).HasMaxLength(50).IsRequired().HasComment("系统角色");
+            entity.Property(x => x.IsEnabled).HasComment("是否允许登录");
+            entity.Property(x => x.LastLoginAt).HasComment("最后登录时间（UTC）");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasIndex(x => x.IsDeleted);
             entity.HasQueryFilter(x => !x.IsDeleted);
@@ -56,31 +72,41 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<AssessmentRecord>(entity =>
         {
-            entity.ToTable("AssessmentRecords");
+            entity.ToTable("AssessmentRecords", table => table.HasComment("正式考核记录表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Id).HasComment("考核记录主键");
+            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired()
+                .HasComment("考核日期类型：Fixed固定日期，Range日期区间");
             entity.Property(x => x.AssessmentDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))
                 .HasColumnType("date")
-                .IsRequired();
+                .IsRequired()
+                .HasComment("考核开始日期或固定日期");
             entity.Property(x => x.AssessmentEndDate)
                 .HasConversion(new ValueConverter<DateOnly?, DateTime?>(
                     date => date.HasValue ? date.Value.ToDateTime(TimeOnly.MinValue) : null,
                     date => date.HasValue ? DateOnly.FromDateTime(date.Value) : null))
-                .HasColumnType("date");
+                .HasColumnType("date")
+                .HasComment("考核结束日期，仅日期区间类型使用");
             entity.Property(x => x.DetailDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))
                 .HasColumnType("date")
-                .IsRequired();
-            entity.Property(x => x.PersonName).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.Amount).HasColumnType("decimal(18,2)");
-            entity.Property(x => x.Reason).HasMaxLength(300).IsRequired();
-            entity.Property(x => x.Remark).HasMaxLength(500);
-            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+                .IsRequired()
+                .HasComment("考核明细到达财务并登记的日期");
+            entity.Property(x => x.DepartmentId).HasComment("所属部门主键");
+            entity.Property(x => x.PersonName).HasMaxLength(50).IsRequired().HasComment("被考核人员姓名，允许多个姓名");
+            entity.Property(x => x.Amount).HasColumnType("decimal(18,2)").HasComment("考核总金额");
+            entity.Property(x => x.Reason).HasMaxLength(300).IsRequired().HasComment("考核事由");
+            entity.Property(x => x.Remark).HasMaxLength(500).HasComment("备注");
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20)
+                .HasComment("处理状态：Pending待处理，Completed已完成");
+            entity.Property(x => x.PaymentMethodId).HasComment("收款方式主键，设置后视为已完成");
+            entity.Property(x => x.CreatedByUserId).HasComment("创建记录的用户主键");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => x.AssessmentDate);
             entity.HasIndex(x => x.DetailDate);
             entity.HasIndex(x => new { x.DepartmentId, x.AssessmentDate });
@@ -96,9 +122,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<AssessmentImportBatch>(entity =>
         {
-            entity.ToTable("AssessmentImportBatches");
+            entity.ToTable("AssessmentImportBatches", table => table.HasComment("Excel 导入批次表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(x => x.Id).HasComment("导入批次主键");
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20)
+                .HasComment("批次状态：Pending待确认，Confirmed已确认，Cancelled已取消");
+            entity.Property(x => x.CreatedByUserId).HasComment("发起导入的用户主键");
+            entity.Property(x => x.ConfirmedAt).HasComment("确认导入时间（UTC）");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.IsDeleted);
             entity.HasQueryFilter(x => !x.IsDeleted);
@@ -108,31 +139,41 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<AssessmentImportRow>(entity =>
         {
-            entity.ToTable("AssessmentImportRows");
+            entity.ToTable("AssessmentImportRows", table => table.HasComment("Excel 导入待确认明细表"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Id).HasComment("暂存明细主键");
+            entity.Property(x => x.BatchId).HasComment("所属导入批次主键");
+            entity.Property(x => x.SourceRowNumber).HasComment("原 Excel 行号，手工添加时为0");
+            entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired()
+                .HasComment("考核日期类型：Fixed固定日期，Range日期区间");
             entity.Property(x => x.AssessmentDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))
                 .HasColumnType("date")
-                .IsRequired();
+                .IsRequired()
+                .HasComment("考核开始日期或固定日期");
             entity.Property(x => x.AssessmentEndDate)
                 .HasConversion(new ValueConverter<DateOnly?, DateTime?>(
                     date => date.HasValue ? date.Value.ToDateTime(TimeOnly.MinValue) : null,
                     date => date.HasValue ? DateOnly.FromDateTime(date.Value) : null))
-                .HasColumnType("date");
+                .HasColumnType("date")
+                .HasComment("考核结束日期，仅日期区间类型使用");
             entity.Property(x => x.DetailDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
                     date => DateOnly.FromDateTime(date))
                 .HasColumnType("date")
-                .IsRequired();
-            entity.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.PersonName).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.Amount).HasColumnType("decimal(18,2)");
-            entity.Property(x => x.Reason).HasMaxLength(300).IsRequired();
-            entity.Property(x => x.Remark).HasMaxLength(500);
+                .IsRequired()
+                .HasComment("当前明细分组对应的考核明细日期");
+            entity.Property(x => x.DepartmentId).HasComment("已匹配的部门主键，未识别时为空");
+            entity.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired().HasComment("Excel 中识别出的部门名称");
+            entity.Property(x => x.PersonName).HasMaxLength(50).IsRequired().HasComment("被考核人员姓名，允许多个姓名");
+            entity.Property(x => x.Amount).HasColumnType("decimal(18,2)").HasComment("考核总金额");
+            entity.Property(x => x.Reason).HasMaxLength(300).IsRequired().HasComment("考核事由");
+            entity.Property(x => x.Remark).HasMaxLength(500).HasComment("备注");
+            entity.Property(x => x.PaymentMethodId).HasComment("已匹配的收款方式主键");
+            ConfigureAuditColumns(entity);
             entity.HasIndex(x => new { x.BatchId, x.IsDeleted });
             entity.HasQueryFilter(x => !x.IsDeleted);
             entity.HasOne(x => x.Batch).WithMany(x => x.Rows)
@@ -158,6 +199,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     private void ConvertDeletesToSoftDeletes()
     {
+        // 将 EF 的删除状态改为更新状态，统一保留历史数据并记录删除时间。
         var deletedEntries = ChangeTracker.Entries<ISoftDeletable>()
             .Where(entry => entry.State == EntityState.Deleted)
             .ToList();
@@ -171,5 +213,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entry.Entity.DeletedAt = now;
             entry.Entity.UpdatedAt = now;
         }
+    }
+
+    private static void ConfigureAuditColumns<TEntity>(EntityTypeBuilder<TEntity> entity)
+        where TEntity : class, ISoftDeletable
+    {
+        entity.Property<DateTime>("CreatedAt").HasComment("创建时间（UTC）");
+        entity.Property(x => x.UpdatedAt).HasComment("最后更新时间（UTC）");
+        entity.Property(x => x.IsDeleted).HasComment("逻辑删除标记");
+        entity.Property(x => x.DeletedAt).HasComment("逻辑删除时间（UTC）");
     }
 }

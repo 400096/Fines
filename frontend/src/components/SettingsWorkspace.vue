@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 系统设置工作区，为部门、收款方式和用户页面提供统一的页签导航。
 import { CreditCard, OfficeBuilding, Setting, UserFilled } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

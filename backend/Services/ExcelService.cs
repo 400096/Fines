@@ -10,8 +10,12 @@ using System.Text;
 
 namespace FineManagement.Api.Services;
 
+/// <summary>
+/// 处理 Excel 导入和导出。导入先写入中间表供前端校对，确认后再转入正式记录表。
+/// </summary>
 public sealed class ExcelService(AppDbContext db) : IExcelService
 {
+    /// <summary>解析上传文件并创建待确认导入批次，不直接写入正式考核记录。</summary>
     public async Task<ExcelImportResult> StageAssessmentRecordsAsync(Stream stream, long? userId, CancellationToken cancellationToken)
     {
         var parseResult = AssessmentExcelParser.Parse(stream);
@@ -40,6 +44,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         var pendingDepartments = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var stagedRecords = new List<(ParsedAssessmentRow Source, AssessmentImportRow Record, PaymentMethod? PaymentMethod)>();
         var failedRows = parseResult.Errors.Select(ToFailedRow).ToList();
+        // 部门按名称或编码匹配；未匹配部门保留原文，待确认导入时自动创建。
         foreach (var row in parseResult.Rows)
         {
             try
@@ -128,6 +133,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         long? userId,
         CancellationToken cancellationToken)
     {
+        // 部门恢复/创建与正式记录写入位于同一事务，任一失败都会整体回滚。
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var batch = await db.AssessmentImportBatches
             .Include(x => x.Rows)
@@ -253,6 +259,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         return code;
     }
 
+    /// <summary>按当前全部筛选和排序条件导出考核记录。</summary>
     public async Task<byte[]> ExportAssessmentRecordsAsync(AssessmentRecordQuery query, CancellationToken cancellationToken)
     {
         var recordsQuery = db.AssessmentRecords.AsNoTracking()
@@ -333,6 +340,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         if (records.Count > 0)
             worksheet.Rows(firstDataRow, firstDataRow + records.Count - 1).Height = 24;
 
+        // 单日明细筛选时，按业务模板增加“X.X考核明细”标题行。
         if (filteredDetailDate.HasValue)
         {
             var titleRowRange = worksheet.Range(1, 1, 1, headers.Length);

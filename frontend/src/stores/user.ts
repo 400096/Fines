@@ -10,6 +10,7 @@ interface UserInfo {
   expiresAt: string
 }
 
+// 优先恢复已保存的登录用户；缓存损坏时主动清空并回退到访客状态。
 function loadUserInfo(): UserInfo {
   const raw = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY)
   if (raw) {
@@ -24,6 +25,7 @@ export const useUserStore = defineStore('user', {
     userInfo: loadUserInfo(),
   }),
   actions: {
+    // remember=true 使用长期存储，否则仅在当前浏览器会话中保留登录状态。
     async login(username: string, password: string, remember: boolean) {
       const result = await authApi.login(username.trim(), password)
       clearStoredSession()

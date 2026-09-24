@@ -10,11 +10,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>系统用户查询、账号维护和逻辑删除接口。</summary>
 [ApiController]
 [Authorize(Roles = "超级管理员")]
 [Route("api/users")]
 public class UsersController(AppDbContext db) : ControllerBase
 {
+    /// <summary>分页查询用户。</summary>
     [HttpGet]
     public async Task<ActionResult<PagedResult<UserResponse>>> GetList([FromQuery] UserQuery query, CancellationToken cancellationToken)
     {
@@ -33,6 +35,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         return Ok(new PagedResult<UserResponse>(items, total, query.Page, query.PageSize));
     }
 
+    /// <summary>获取单个用户。</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<UserResponse>> GetById(long id, CancellationToken cancellationToken)
     {
@@ -42,6 +45,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         return user is null ? NotFound() : Ok(user);
     }
 
+    /// <summary>新增用户并安全哈希初始密码。</summary>
     [HttpPost]
     public async Task<ActionResult<UserResponse>> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
@@ -66,6 +70,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, ToResponse(entity));
     }
 
+    /// <summary>编辑用户；密码留空时保持原密码。</summary>
     [HttpPut("{id:long}")]
     public async Task<ActionResult<UserResponse>> Update(long id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
@@ -88,6 +93,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         return Ok(ToResponse(entity));
     }
 
+    /// <summary>逻辑删除用户，当前登录用户不能删除自己。</summary>
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

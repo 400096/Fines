@@ -7,6 +7,7 @@ import App from './App.vue'
 import router from './router'
 import './styles/index.css'
 
+// 前端应用入口：统一注册状态管理、路由和中文 Element Plus 组件库。
 const app = createApp(App)
 
 app.use(createPinia())

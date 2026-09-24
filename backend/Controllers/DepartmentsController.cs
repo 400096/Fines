@@ -8,11 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>部门查询和维护接口。</summary>
 [ApiController]
 [Authorize]
 [Route("api/departments")]
 public class DepartmentsController(AppDbContext db) : ControllerBase
 {
+    /// <summary>获取部门下拉列表。</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<DepartmentResponse>>> GetList(
         [FromQuery] string? keyword,
@@ -28,6 +30,7 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
         return Ok(items);
     }
 
+    /// <summary>分页查询部门管理列表。</summary>
     [HttpGet("paged")]
     public async Task<ActionResult<PagedResult<DepartmentResponse>>> GetPagedList(
         [FromQuery] DepartmentQuery request,
@@ -47,6 +50,7 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
         return Ok(new PagedResult<DepartmentResponse>(items, total, request.Page, request.PageSize));
     }
 
+    /// <summary>获取单个部门。</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<DepartmentResponse>> GetById(long id, CancellationToken cancellationToken)
     {
@@ -56,6 +60,7 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
         return item is null ? NotFound() : Ok(item);
     }
 
+    /// <summary>新增部门。</summary>
     [HttpPost]
     public async Task<ActionResult<DepartmentResponse>> Create(SaveDepartmentRequest request, CancellationToken cancellationToken)
     {
@@ -76,6 +81,7 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, response);
     }
 
+    /// <summary>编辑部门。</summary>
     [HttpPut("{id:long}")]
     public async Task<ActionResult<DepartmentResponse>> Update(long id, SaveDepartmentRequest request, CancellationToken cancellationToken)
     {
@@ -97,6 +103,7 @@ public class DepartmentsController(AppDbContext db) : ControllerBase
         return Ok(ToResponse(entity));
     }
 
+    /// <summary>逻辑删除部门。</summary>
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

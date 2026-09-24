@@ -10,6 +10,7 @@ using Serilog;
 using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+// 日志写入程序目录下的 logs 文件夹，每天生成一个文件并保留最近 30 天。
 var logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
 Directory.CreateDirectory(logDirectory);
 
@@ -34,6 +35,7 @@ builder.Host.UseSerilog(Log.Logger, dispose: true);
 
 try
 {
+    // Web API 使用字符串枚举，确保前端收到 Pending、Completed 等稳定值。
     builder.Services
         .AddControllers()
         .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -68,6 +70,7 @@ try
         });
 
     builder.Services.AddAuthorization();
+    // 当前内网部署允许任意来源访问 API；如部署到公网，应改成明确的前端域名白名单。
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("Frontend", policy => policy
@@ -101,10 +104,15 @@ try
                 Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
             }] = Array.Empty<string>()
         });
+
+        // 将控制器 XML 注释显示在 Swagger 接口说明中。
+        var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
+        options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
     });
 
     var app = builder.Build();
 
+    // 记录请求耗时、状态码、远端地址及登录用户名，便于部署后排查接口问题。
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -136,6 +144,7 @@ try
     app.UseAuthorization();
     app.MapControllers();
 
+    // 首次运行创建数据库结构并补齐兼容字段；可通过配置关闭启动初始化。
     if (app.Configuration.GetValue("Database:InitializeOnStartup", true))
     {
         await DbInitializer.InitializeAsync(app.Services);

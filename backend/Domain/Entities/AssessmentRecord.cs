@@ -2,6 +2,7 @@ using FineManagement.Api.Domain.Enums;
 
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>已经确认入库并在考核记录列表展示的正式记录。</summary>
 public class AssessmentRecord : ISoftDeletable
 {
     public long Id { get; set; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 首页统计卡片，统一展示指标、单位及辅助趋势信息。
 import type { Component } from 'vue'
 const props = withDefaults(defineProps<{ label: string; value: string; unit: string; icon: Component; tone?: 'green' | 'blue' | 'orange'; trend?: string; clickable?: boolean }>(), { tone: 'green', trend: '+12%', clickable: false })
 const emit = defineEmits<{ click: [] }>()

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 业务页面通用标题组件。
 import type { Component } from 'vue'
 defineProps<{ title: string; subtitle: string; icon: Component }>()
 </script>

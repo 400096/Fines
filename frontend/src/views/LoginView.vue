@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 登录页使用前端随机图形验证码，验证通过后再请求后端登录接口。
 import { Lock, Refresh, User, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, reactive, ref } from 'vue'

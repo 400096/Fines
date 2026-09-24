@@ -11,11 +11,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>考核记录查询、维护、Excel 暂存导入及导出接口。</summary>
 [ApiController]
 [Authorize]
 [Route("api/assessment-records")]
 public class AssessmentRecordsController(AppDbContext db, IExcelService excelService) : ControllerBase
 {
+    /// <summary>按日期、明细日期、部门、姓名和状态分页查询考核记录。</summary>
     [HttpGet]
     public async Task<ActionResult<PagedResult<AssessmentRecordResponse>>> GetList(
         [FromQuery] AssessmentRecordQuery query,
@@ -36,6 +38,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(new PagedResult<AssessmentRecordResponse>(items, total, query.Page, query.PageSize));
     }
 
+    /// <summary>获取一条考核记录的完整信息。</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<AssessmentRecordResponse>> GetById(long id, CancellationToken cancellationToken)
     {
@@ -46,6 +49,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return item is null ? NotFound() : Ok(ToResponse(item));
     }
 
+    /// <summary>新增考核记录；新增时状态固定为待处理。</summary>
     [HttpPost]
     public async Task<ActionResult<AssessmentRecordResponse>> Create(CreateAssessmentRecordRequest request, CancellationToken cancellationToken)
     {
@@ -77,6 +81,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, ToResponse(entity));
     }
 
+    /// <summary>编辑考核记录；选择收款方式后记录自动变为已完成。</summary>
     [HttpPut("{id:long}")]
     public async Task<ActionResult<AssessmentRecordResponse>> Update(long id, UpdateAssessmentRecordRequest request, CancellationToken cancellationToken)
     {
@@ -116,6 +121,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(ToResponse(entity));
     }
 
+    /// <summary>逻辑删除考核记录。</summary>
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
@@ -126,6 +132,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return NoContent();
     }
 
+    /// <summary>解析 Excel 并写入待确认中间表。</summary>
     [HttpPost("import")]
     [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<ActionResult<ExcelImportResult>> Import(IFormFile file, CancellationToken cancellationToken)
@@ -138,6 +145,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(await excelService.StageAssessmentRecordsAsync(stream, User.GetUserId(), cancellationToken));
     }
 
+    /// <summary>在指定导入批次中手工添加一条待确认数据。</summary>
     [HttpPost("import/{batchId:long}/rows")]
     public async Task<ActionResult<ExcelStagedRow>> AddImportRow(
         long batchId,
@@ -194,6 +202,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(ToStagedRow(row));
     }
 
+    /// <summary>修改导入批次中的一条待确认数据。</summary>
     [HttpPut("import/{batchId:long}/rows/{rowId:long}")]
     public async Task<ActionResult<ExcelStagedRow>> UpdateImportRow(
         long batchId,
@@ -248,6 +257,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(ToStagedRow(row));
     }
 
+    /// <summary>从导入批次中逻辑删除一条待确认数据。</summary>
     [HttpDelete("import/{batchId:long}/rows/{rowId:long}")]
     public async Task<IActionResult> DeleteImportRow(long batchId, long rowId, CancellationToken cancellationToken)
     {
@@ -263,6 +273,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return NoContent();
     }
 
+    /// <summary>确认导入批次，并将暂存数据一次性写入正式记录表。</summary>
     [HttpPost("import/{batchId:long}/confirm")]
     public async Task<ActionResult<ExcelImportConfirmResult>> ConfirmImport(long batchId, CancellationToken cancellationToken)
     {
@@ -284,6 +295,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         }
     }
 
+    /// <summary>取消并逻辑删除尚未确认的导入批次。</summary>
     [HttpDelete("import/{batchId:long}")]
     public async Task<IActionResult> CancelImport(long batchId, CancellationToken cancellationToken)
     {
@@ -301,6 +313,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return NoContent();
     }
 
+    /// <summary>按当前筛选和排序条件导出全部匹配记录。</summary>
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] AssessmentRecordQuery query, CancellationToken cancellationToken)
     {
@@ -310,6 +323,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
 
     private static IQueryable<AssessmentRecord> ApplyFilters(IQueryable<AssessmentRecord> records, AssessmentRecordQuery query)
     {
+        // 区间记录只要与查询区间有重叠即命中；明细日期按财务登记日期筛选。
         if (query.DateFrom.HasValue) records = records.Where(x => (x.AssessmentEndDate ?? x.AssessmentDate) >= query.DateFrom.Value);
         if (query.DateTo.HasValue) records = records.Where(x => x.AssessmentDate <= query.DateTo.Value);
         if (query.DetailDateFrom.HasValue) records = records.Where(x => x.DetailDate >= query.DetailDateFrom.Value);

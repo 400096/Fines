@@ -4,8 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Data;
 
+/// <summary>
+/// 首次启动时创建基础数据，并对旧版本数据库执行幂等的字段、索引兼容升级。
+/// </summary>
 public static class DbInitializer
 {
+    /// <summary>初始化数据库结构、默认收款方式和初始管理员。</summary>
     public static async Task InitializeAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
@@ -48,6 +52,7 @@ public static class DbInitializer
 
     private static async Task EnsureSoftDeleteSchemaAsync(AppDbContext db)
     {
+        // 老数据库可能没有逻辑删除字段；逐表检查后再添加，避免重复执行时报错。
         var tables = new[]
         {
             "AssessmentRecords", "AssessmentImportBatches", "AssessmentImportRows",
@@ -62,14 +67,14 @@ public static class DbInitializer
                 if (!await ColumnExistsAsync(connection, table, "IsDeleted"))
                 {
                     await using var addDeletedFlag = connection.CreateCommand();
-                    addDeletedFlag.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0";
+                    addDeletedFlag.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记：1已删除，0正常'";
                     await addDeletedFlag.ExecuteNonQueryAsync();
                 }
 
                 if (!await ColumnExistsAsync(connection, table, "DeletedAt"))
                 {
                     await using var addDeletedAt = connection.CreateCommand();
-                    addDeletedAt.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `DeletedAt` DATETIME(6) NULL";
+                    addDeletedAt.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `DeletedAt` DATETIME(6) NULL COMMENT '逻辑删除时间（UTC）'";
                     await addDeletedAt.ExecuteNonQueryAsync();
                 }
 
@@ -89,46 +94,47 @@ public static class DbInitializer
 
     private static async Task EnsureImportStagingSchemaAsync(AppDbContext db)
     {
+        // 导入数据先进入批次和暂存明细表，只有确认后才写入正式考核记录。
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS `AssessmentImportBatches`
             (
-                `Id` BIGINT NOT NULL AUTO_INCREMENT,
-                `Status` VARCHAR(20) NOT NULL DEFAULT 'Pending',
-                `CreatedByUserId` BIGINT NULL,
-                `CreatedAt` DATETIME(6) NOT NULL,
-                `UpdatedAt` DATETIME(6) NOT NULL,
-                `ConfirmedAt` DATETIME(6) NULL,
-                `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0,
-                `DeletedAt` DATETIME(6) NULL,
+                `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '导入批次主键',
+                `Status` VARCHAR(20) NOT NULL DEFAULT 'Pending' COMMENT '批次状态',
+                `CreatedByUserId` BIGINT NULL COMMENT '发起导入的用户主键',
+                `CreatedAt` DATETIME(6) NOT NULL COMMENT '创建时间（UTC）',
+                `UpdatedAt` DATETIME(6) NOT NULL COMMENT '最后更新时间（UTC）',
+                `ConfirmedAt` DATETIME(6) NULL COMMENT '确认导入时间（UTC）',
+                `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+                `DeletedAt` DATETIME(6) NULL COMMENT '逻辑删除时间（UTC）',
                 PRIMARY KEY (`Id`),
                 CONSTRAINT `FK_ImportBatches_Users` FOREIGN KEY (`CreatedByUserId`)
                     REFERENCES `Users` (`Id`) ON DELETE SET NULL,
                 KEY `IX_AssessmentImportBatches_Status` (`Status`),
                 KEY `IX_AssessmentImportBatches_IsDeleted` (`IsDeleted`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Excel 导入批次表'
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS `AssessmentImportRows`
             (
-                `Id` BIGINT NOT NULL AUTO_INCREMENT,
-                `BatchId` BIGINT NOT NULL,
-                `SourceRowNumber` INT NOT NULL DEFAULT 0,
-                `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed',
-                `AssessmentDate` DATE NOT NULL,
-                `AssessmentEndDate` DATE NULL,
-                `DetailDate` DATE NOT NULL,
-                `DepartmentId` BIGINT NULL,
-                `DepartmentName` VARCHAR(100) NOT NULL,
-                `PersonName` VARCHAR(50) NOT NULL,
-                `Amount` DECIMAL(18,2) NOT NULL,
-                `Reason` VARCHAR(300) NOT NULL,
-                `Remark` VARCHAR(500) NULL,
-                `PaymentMethodId` BIGINT NULL,
-                `CreatedAt` DATETIME(6) NOT NULL,
-                `UpdatedAt` DATETIME(6) NOT NULL,
-                `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0,
-                `DeletedAt` DATETIME(6) NULL,
+                `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '暂存明细主键',
+                `BatchId` BIGINT NOT NULL COMMENT '所属导入批次主键',
+                `SourceRowNumber` INT NOT NULL DEFAULT 0 COMMENT '原 Excel 行号，手工添加时为0',
+                `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型',
+                `AssessmentDate` DATE NOT NULL COMMENT '考核开始日期或固定日期',
+                `AssessmentEndDate` DATE NULL COMMENT '考核结束日期',
+                `DetailDate` DATE NOT NULL COMMENT '考核明细日期',
+                `DepartmentId` BIGINT NULL COMMENT '已匹配的部门主键',
+                `DepartmentName` VARCHAR(100) NOT NULL COMMENT 'Excel 中识别出的部门名称',
+                `PersonName` VARCHAR(50) NOT NULL COMMENT '被考核人员姓名',
+                `Amount` DECIMAL(18,2) NOT NULL COMMENT '考核总金额',
+                `Reason` VARCHAR(300) NOT NULL COMMENT '考核事由',
+                `Remark` VARCHAR(500) NULL COMMENT '备注',
+                `PaymentMethodId` BIGINT NULL COMMENT '已匹配的收款方式主键',
+                `CreatedAt` DATETIME(6) NOT NULL COMMENT '创建时间（UTC）',
+                `UpdatedAt` DATETIME(6) NOT NULL COMMENT '最后更新时间（UTC）',
+                `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+                `DeletedAt` DATETIME(6) NULL COMMENT '逻辑删除时间（UTC）',
                 PRIMARY KEY (`Id`),
                 CONSTRAINT `FK_ImportRows_Batches` FOREIGN KEY (`BatchId`)
                     REFERENCES `AssessmentImportBatches` (`Id`) ON DELETE RESTRICT,
@@ -137,12 +143,13 @@ public static class DbInitializer
                 CONSTRAINT `FK_ImportRows_PaymentMethods` FOREIGN KEY (`PaymentMethodId`)
                     REFERENCES `PaymentMethods` (`Id`) ON DELETE RESTRICT,
                 KEY `IX_AssessmentImportRows_BatchId_IsDeleted` (`BatchId`, `IsDeleted`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Excel 导入待确认明细表'
             """);
     }
 
     private static async Task EnsureAssessmentDateSchemaAsync(AppDbContext db)
     {
+        // 兼容历史库：补充日期类型、结束日期和财务登记的考核明细日期。
         var tables = new[] { "AssessmentRecords", "AssessmentImportRows" };
         await db.Database.OpenConnectionAsync();
         try
@@ -153,21 +160,21 @@ public static class DbInitializer
                 if (!await ColumnExistsAsync(connection, table, "AssessmentDateType"))
                 {
                     await using var command = connection.CreateCommand();
-                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' AFTER `AssessmentDate`";
+                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型：Fixed固定日期，Range日期区间' AFTER `AssessmentDate`";
                     await command.ExecuteNonQueryAsync();
                 }
 
                 if (!await ColumnExistsAsync(connection, table, "AssessmentEndDate"))
                 {
                     await using var command = connection.CreateCommand();
-                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentEndDate` DATE NULL AFTER `AssessmentDate`";
+                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentEndDate` DATE NULL COMMENT '考核结束日期，仅日期区间类型使用' AFTER `AssessmentDate`";
                     await command.ExecuteNonQueryAsync();
                 }
 
                 if (!await ColumnExistsAsync(connection, table, "DetailDate"))
                 {
                     await using var addColumn = connection.CreateCommand();
-                    addColumn.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `DetailDate` DATE NULL AFTER `AssessmentEndDate`";
+                    addColumn.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `DetailDate` DATE NULL COMMENT '考核明细到达财务并登记的日期' AFTER `AssessmentEndDate`";
                     await addColumn.ExecuteNonQueryAsync();
 
                     await using var backfill = connection.CreateCommand();
@@ -175,7 +182,7 @@ public static class DbInitializer
                     await backfill.ExecuteNonQueryAsync();
 
                     await using var makeRequired = connection.CreateCommand();
-                    makeRequired.CommandText = $"ALTER TABLE `{table}` MODIFY COLUMN `DetailDate` DATE NOT NULL";
+                    makeRequired.CommandText = $"ALTER TABLE `{table}` MODIFY COLUMN `DetailDate` DATE NOT NULL COMMENT '考核明细到达财务并登记的日期'";
                     await makeRequired.ExecuteNonQueryAsync();
                 }
             }

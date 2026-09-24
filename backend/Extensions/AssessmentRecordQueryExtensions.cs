@@ -3,6 +3,7 @@ using FineManagement.Api.DTOs.Assessments;
 
 namespace FineManagement.Api.Extensions;
 
+/// <summary>服务器端排序扩展，保证排序覆盖完整筛选结果而不是只排序当前页。</summary>
 public static class AssessmentRecordQueryExtensions
 {
     public static IOrderedQueryable<AssessmentRecord> ApplySorting(

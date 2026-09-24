@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { getStoredToken } from '@/api/http'
 
+// 使用 Hash 路由，部署到 IIS 静态站点时刷新子页面不依赖 URL Rewrite。
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
@@ -51,6 +52,7 @@ const router = createRouter({
   ],
 })
 
+// 全局登录守卫：未登录页面统一跳转，并保留原目标地址供登录后返回。
 router.beforeEach((to) => {
   const token = getStoredToken()
   if (to.path !== '/login' && !token) {
@@ -59,6 +61,7 @@ router.beforeEach((to) => {
   if (to.path === '/login' && token) return '/dashboard'
 })
 
+// 根据当前路由同步浏览器标题。
 router.afterEach((to) => {
   document.title = `${String(to.meta.title ?? '首页')} - 考核管理系统`
 })

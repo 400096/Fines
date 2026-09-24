@@ -1,5 +1,6 @@
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>可登录系统的用户账号。</summary>
 public class AppUser : ISoftDeletable
 {
     public long Id { get; set; }

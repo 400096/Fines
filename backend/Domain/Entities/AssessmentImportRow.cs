@@ -2,6 +2,7 @@ using FineManagement.Api.Domain.Enums;
 
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>Excel 导入批次中的一条可编辑暂存记录。</summary>
 public class AssessmentImportRow : ISoftDeletable
 {
     public long Id { get; set; }

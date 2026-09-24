@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 登录后的通用布局：左侧导航、顶部用户区和主内容路由出口。
 import { Bell, Document, Fold, HomeFilled, Setting } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -9,6 +10,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const collapsed = ref(false)
+// 系统设置的三个子页面在侧栏中共用同一个高亮入口。
 const activePath = computed(() => ['/departments', '/payment-methods', '/users'].includes(route.path) ? '/departments' : route.path)
 const menus = [
   { path: '/dashboard', label: '首页', icon: HomeFilled },

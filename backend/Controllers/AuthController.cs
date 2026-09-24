@@ -8,10 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FineManagement.Api.Controllers;
 
+/// <summary>用户登录与 JWT 签发接口。</summary>
 [ApiController]
 [Route("api/auth")]
 public class AuthController(AppDbContext db, ITokenService tokenService) : ControllerBase
 {
+    /// <summary>校验用户名和密码，返回当前用户信息及访问令牌。</summary>
     [HttpPost("login")]
     [ProducesResponseType<LoginResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

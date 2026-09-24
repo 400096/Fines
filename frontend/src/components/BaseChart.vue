@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// ECharts 通用封装：监听容器尺寸和配置变化，统一处理初始化与销毁。
 import type { EChartsOption } from 'echarts'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'

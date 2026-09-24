@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 用户管理：维护登录账号、角色和启停状态，并禁止当前用户删除自己。
 import { Plus, Refresh, Search, UserFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
@@ -70,6 +71,7 @@ function openEdit(row: SystemUser) {
   dialogVisible.value = true
 }
 function formatPhone(phone: string | null) {
+  // 列表中对标准手机号做脱敏显示，编辑弹窗仍使用原始值。
   if (!phone) return '—'
   return /^1\d{10}$/.test(phone) ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : phone
 }

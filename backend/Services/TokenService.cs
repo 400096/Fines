@@ -6,8 +6,10 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace FineManagement.Api.Services;
 
+/// <summary>根据用户信息签发带角色声明的 JWT 访问令牌。</summary>
 public sealed class TokenService(IConfiguration configuration) : ITokenService
 {
+    /// <summary>创建访问令牌并返回其 UTC 过期时间。</summary>
     public string CreateToken(AppUser user, out DateTime expiresAt)
     {
         var key = configuration["Jwt:Key"]

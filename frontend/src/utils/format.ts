@@ -6,6 +6,7 @@ export function formatDateTime(value?: string | null) {
   }).format(new Date(value)).replaceAll('/', '-')
 }
 
+// 页面共用的日期、金额显示格式，避免各页面产生不同格式。
 export function formatMoney(value: number) {
   return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value)
 }

@@ -1,5 +1,6 @@
 namespace FineManagement.Api.Domain.Entities;
 
+/// <summary>考核记录所属的组织部门。</summary>
 public class Department : ISoftDeletable
 {
     public long Id { get; set; }

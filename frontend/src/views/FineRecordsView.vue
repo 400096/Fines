@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 考核记录主页面：负责筛选、分页排序、增删改、Excel 暂存确认和导出。
 import { Document, Download, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -12,6 +13,7 @@ import { consumePendingImportFile } from '@/utils/importTransfer'
 
 const route = useRoute()
 const router = useRouter()
+// 筛选条件直接映射后端查询 DTO；部门支持多选，明细日期为单日筛选。
 const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', status: '' })
 const records = ref<AssessmentRecord[]>([])
 const departments = ref<Department[]>([])
@@ -54,6 +56,7 @@ const pendingDepartmentNames = computed(() => Array.from(new Set(
     .filter(item => !item.departmentId)
     .map(item => item.departmentName),
 )))
+// 未识别收款方式的数据排在最前，方便在确认导入前优先人工修正。
 const orderedStagedRows = computed(() => [...(lastImportResult.value?.stagedRows ?? [])].sort((left, right) => {
   const leftUnrecognized = !left.paymentMethodName
   const rightUnrecognized = !right.paymentMethodName
@@ -393,6 +396,7 @@ async function processImportFile(file: File) {
   importing.value = true
   try {
     const result = await assessmentApi.importExcel(file)
+    // 检测旧版后端响应，避免缺少日期类型字段时把区间日期误当成固定日期。
     const missingNewDateFields = (result.stagedRows ?? []).some((row) => {
       const dateType = normalizeAssessmentDateType(row.assessmentDateType, row.assessmentEndDate)
       return row.assessmentDateType == null
@@ -473,6 +477,7 @@ function beforeCloseImport(done: () => void) {
 }
 
 onMounted(async () => {
+  // 首页跳转可通过查询参数预设日期、状态，或直接触发新增/导入操作。
   const routeDate = typeof route.query.date === 'string' ? route.query.date : ''
   const routeDetailDate = typeof route.query.detailDate === 'string' ? route.query.detailDate : ''
   const routeStatus = typeof route.query.status === 'string' ? route.query.status : ''

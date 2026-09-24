@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 系统品牌标识；compact 模式仅展示图标。
 withDefaults(defineProps<{ compact?: boolean; light?: boolean }>(), {
   compact: false,
   light: false,

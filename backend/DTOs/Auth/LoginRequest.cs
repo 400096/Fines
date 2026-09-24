@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FineManagement.Api.DTOs.Auth;
 
+/// <summary>用户名密码登录请求。</summary>
 public sealed class LoginRequest
 {
     [Required, MaxLength(50)]

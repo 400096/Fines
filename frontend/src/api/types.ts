@@ -1,6 +1,8 @@
+// 与后端枚举字符串保持一致，避免前后端状态值不匹配。
 export type AssessmentStatus = 'Pending' | 'Completed'
 export type AssessmentDateType = 'Fixed' | 'Range'
 
+// 认证与通用分页模型。
 export interface LoginResponse {
   token: string
   expiresAt: string
@@ -17,6 +19,7 @@ export interface PagedResult<T> {
   pageSize: number
 }
 
+// 考核记录查询、编辑及 Excel 导入模型。
 export interface AssessmentRecord {
   id: number
   assessmentDateType: AssessmentDateType
@@ -128,6 +131,7 @@ export interface ExcelImportFailedRow {
   paymentMethodName: string | null
 }
 
+// 部门、收款方式和用户管理模型。
 export interface Department {
   id: number
   name: string

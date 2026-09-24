@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 首页仪表盘：展示汇总数据、趋势、事由占比和快捷操作。
 import type { EChartsOption } from 'echarts'
 import { Coin, Document, List, Timer } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
@@ -18,6 +19,7 @@ const dashboard = ref<DashboardResponse>({
   trend: [], distribution: [], recentRecords: [],
 })
 
+// 图表配置由接口数据计算生成，接口刷新后 ECharts 会自动更新。
 const lineOption = computed<EChartsOption>(() => ({
   grid: { left: 42, right: 20, top: 24, bottom: 30 },
   tooltip: { trigger: 'axis' },
