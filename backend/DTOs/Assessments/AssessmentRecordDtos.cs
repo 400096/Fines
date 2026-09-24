@@ -13,6 +13,7 @@ public sealed class AssessmentRecordQuery
     public long? DepartmentId { get; set; }
     public List<long> DepartmentIds { get; set; } = [];
     public string? Name { get; set; }
+    [MaxLength(500)] public string? Remark { get; set; }
     public AssessmentStatus? Status { get; set; }
     [RegularExpression("^(assessmentDate|detailDate|departmentName|personName|amount)$")]
     public string SortBy { get; set; } = "assessmentDate";
@@ -34,12 +35,12 @@ public class CreateAssessmentRecordRequest
     [Range(typeof(decimal), "0.01", "999999999")] public decimal Amount { get; set; }
     [Required, MaxLength(300)] public string Reason { get; set; } = string.Empty;
     [MaxLength(500)] public string? Remark { get; set; }
+    public long? PaymentMethodId { get; set; }
 }
 
 /// <summary>编辑考核记录请求，收款方式决定记录是否已完成。</summary>
 public sealed class UpdateAssessmentRecordRequest : CreateAssessmentRecordRequest
 {
-    public long? PaymentMethodId { get; set; }
 }
 
 /// <summary>手工添加或编辑 Excel 待确认数据的请求。</summary>

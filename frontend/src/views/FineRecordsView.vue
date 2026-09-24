@@ -14,7 +14,7 @@ import { consumePendingImportFile } from '@/utils/importTransfer'
 const route = useRoute()
 const router = useRouter()
 // 筛选条件直接映射后端查询 DTO；部门支持多选，明细日期为单日筛选。
-const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', status: '' })
+const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', remark: '', status: '' })
 const records = ref<AssessmentRecord[]>([])
 const departments = ref<Department[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
@@ -39,14 +39,14 @@ const formRef = ref<FormInstance>()
 const fileInput = ref<HTMLInputElement>()
 const recordForm = reactive({
   assessmentDateType: 'Fixed' as AssessmentDateType, assessmentDate: '', assessmentEndDate: '', detailDate: '',
-  departmentId: 0, departmentName: '', personName: '', amount: 0,
+  departmentId: 0, departmentName: '', personName: '', amount: undefined as number | undefined,
   reason: '', remark: '', paymentMethodId: undefined as number | undefined,
 })
 const rules: FormRules<typeof recordForm> = {
   assessmentDate: [{ required: true, message: '请选择考核日期', trigger: 'change' }],
   detailDate: [{ required: true, message: '请选择考核明细日期', trigger: 'change' }],
   personName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  amount: [{ type: 'number', min: 0.01, message: '考核金额必须大于 0', trigger: 'change' }],
+  amount: [{ required: true, type: 'number', min: 0.01, message: '请输入大于 0 的考核金额', trigger: 'change' }],
   reason: [{ required: true, message: '请输入考核事由', trigger: 'blur' }],
 }
 const enabledDepartments = computed(() => departments.value.filter((item) => item.isEnabled))
@@ -82,6 +82,36 @@ const departmentSelection = computed<number | string>({
   },
 })
 
+function focusNextFormItem(event: KeyboardEvent) {
+  if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return
+  if (event.target instanceof HTMLTextAreaElement && event.shiftKey) return
+
+  const target = event.target as HTMLElement
+  const form = target.closest<HTMLElement>('.record-form')
+  const currentItem = target.closest<HTMLElement>('.el-form-item')
+  if (!form || !currentItem) return
+
+  const items = Array.from(form.querySelectorAll<HTMLElement>('.el-form-item'))
+    .filter(item => item.offsetParent !== null)
+  const currentIndex = items.indexOf(currentItem)
+  if (currentIndex < 0) return
+
+  const findControl = (item: HTMLElement) => Array.from(item.querySelectorAll<HTMLElement>(
+    'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), button:not([disabled])',
+  )).find(control => control.offsetParent !== null && control.tabIndex >= 0)
+
+  let nextControl: HTMLElement | undefined
+  for (let index = currentIndex + 1; index < items.length && !nextControl; index++) {
+    nextControl = findControl(items[index])
+  }
+  nextControl ??= form.closest('.el-dialog')?.querySelector<HTMLElement>('[data-record-save]') ?? undefined
+  if (!nextControl) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  window.setTimeout(() => nextControl?.focus())
+}
+
 function buildQuery(withPaging = true): AssessmentRecordQuery {
   return {
     dateFrom: filters.dates?.[0] || undefined,
@@ -90,6 +120,7 @@ function buildQuery(withPaging = true): AssessmentRecordQuery {
     detailDateTo: filters.detailDate || undefined,
     departmentIds: filters.departmentIds.length ? filters.departmentIds : undefined,
     name: filters.name.trim() || undefined,
+    remark: filters.remark.trim() || undefined,
     status: (filters.status || undefined) as AssessmentStatus | undefined,
     sortBy: sortBy.value,
     sortOrder: sortOrder.value,
@@ -117,7 +148,7 @@ async function loadOptions() {
 }
 function query() { page.value = 1; void loadRecords() }
 function reset() {
-  Object.assign(filters, { dates: [], detailDate: '', departmentIds: [], name: '', status: '' })
+  Object.assign(filters, { dates: [], detailDate: '', departmentIds: [], name: '', remark: '', status: '' })
   page.value = 1
   void loadRecords()
 }
@@ -142,7 +173,7 @@ function openCreate() {
   editingStagingId.value = null
   Object.assign(recordForm, {
     assessmentDateType: 'Fixed', assessmentDate: todayString(), assessmentEndDate: '', detailDate: todayString(),
-    departmentId: 0, departmentName: '', personName: '', amount: 0,
+    departmentId: 0, departmentName: '', personName: '', amount: undefined,
     reason: '', remark: '', paymentMethodId: undefined,
   })
   dialogVisible.value = true
@@ -199,7 +230,7 @@ function openManualImportAdd() {
   editingStagingId.value = null
   Object.assign(recordForm, {
     assessmentDateType: 'Fixed', assessmentDate: todayString(), assessmentEndDate: '', detailDate: todayString(),
-    departmentId: 0, departmentName: '', personName: '', amount: 0,
+    departmentId: 0, departmentName: '', personName: '', amount: undefined,
     reason: '', remark: '', paymentMethodId: undefined,
   })
   dialogVisible.value = true
@@ -245,7 +276,7 @@ function updateAssessmentRange(value: [string, string] | null) {
 }
 function parseImportedAmount(value: string | null) {
   const match = value?.replace(',', '.').match(/\d+(?:\.\d+)?/)
-  return match ? Number(match[0]) : 0
+  return match ? Number(match[0]) : undefined
 }
 function openFailedAdd(row: ExcelImportFailedRow) {
   addingFromImport.value = true
@@ -276,12 +307,13 @@ function openFailedAdd(row: ExcelImportFailedRow) {
 async function saveRecord() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-  if (!recordForm.departmentId && (!addingFromImport.value || !recordForm.departmentName.trim())) {
-    ElMessage.warning('请选择部门')
+  const amount = recordForm.amount
+  if (amount === undefined || amount <= 0) {
+    ElMessage.warning('请输入大于 0 的考核金额')
     return
   }
-  if (editingId.value !== null && !recordForm.paymentMethodId) {
-    ElMessage.warning('请选择收款方式')
+  if (!recordForm.departmentId && (!addingFromImport.value || !recordForm.departmentName.trim())) {
+    ElMessage.warning('请选择部门')
     return
   }
   if (recordForm.assessmentDateType === 'Range' && !recordForm.assessmentEndDate) {
@@ -299,9 +331,10 @@ async function saveRecord() {
     detailDate: recordForm.detailDate,
     departmentId: recordForm.departmentId,
     personName: recordForm.personName.trim(),
-    amount: recordForm.amount,
+    amount,
     reason: recordForm.reason.trim(),
     remark: recordForm.remark.trim() || null,
+    paymentMethodId: recordForm.paymentMethodId || null,
   }
   saving.value = true
   try {
@@ -315,7 +348,6 @@ async function saveRecord() {
         ...baseData,
         departmentId: recordForm.departmentId || null,
         departmentName: recordForm.departmentName.trim(),
-        paymentMethodId: recordForm.paymentMethodId,
       }
       if (editingStagingId.value === null) {
         const saved = await assessmentApi.addStagedRow(importResult.batchId, stagingData)
@@ -340,7 +372,7 @@ async function saveRecord() {
       await assessmentApi.create(baseData)
       ElMessage.success('考核记录已新增')
     } else {
-      await assessmentApi.update(editingId.value, { ...baseData, paymentMethodId: recordForm.paymentMethodId })
+      await assessmentApi.update(editingId.value, baseData)
       ElMessage.success('考核记录已更新')
     }
     const wasStaging = addingFromImport.value
@@ -513,6 +545,7 @@ onMounted(async () => {
         <el-form-item label="考核明细日期"><el-date-picker v-model="filters.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核明细日期" clearable /></el-form-item>
         <el-form-item label="部门"><el-select v-model="filters.departmentIds" placeholder="输入部门名称搜索" multiple clearable filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="1"><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
         <el-form-item label="姓名"><el-input v-model="filters.name" placeholder="请输入姓名" @keyup.enter="query" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="filters.remark" placeholder="请输入备注关键字" clearable @keyup.enter="query" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="filters.status" placeholder="全部" clearable><el-option label="已完成" value="Completed" /><el-option label="待处理" value="Pending" /></el-select></el-form-item>
       </div><div class="filter-actions"><el-button type="primary" :icon="Search" @click="query">查询</el-button><el-button :icon="Refresh" @click="reset">重置</el-button><el-button :icon="Download" :loading="exporting" plain @click="exportExcel">导出 Excel</el-button><el-button type="primary" :icon="Plus" @click="openCreate">新增记录</el-button><el-button :icon="Upload" :loading="importing" plain @click="fileInput?.click()">导入 Excel</el-button><input ref="fileInput" class="file-input" type="file" accept=".xls,.xlsx,.xlsm" @change="importExcel" /></div></el-form>
     </section>
@@ -522,7 +555,7 @@ onMounted(async () => {
       <div class="pagination"><span>共 {{ total }} 条记录</span><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
     </section>
     <el-dialog v-model="dialogVisible" :title="addingFromImport ? (editingStagingId === null ? '添加待导入记录' : '编辑待导入记录') : (editingId === null ? '新增考核记录' : '编辑考核记录')" width="min(640px, 92vw)" destroy-on-close>
-      <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top">
+      <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top" @keydown.enter="focusNextFormItem">
         <div class="record-form__grid">
           <el-form-item label="考核日期类型"><el-radio-group v-model="recordForm.assessmentDateType"><el-radio-button value="Fixed">固定日期</el-radio-button><el-radio-button value="Range">日期区间</el-radio-button></el-radio-group></el-form-item>
           <el-form-item v-if="recordForm.assessmentDateType === 'Fixed'" label="考核日期" prop="assessmentDate"><el-date-picker v-model="recordForm.assessmentDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核日期" /></el-form-item>
@@ -530,13 +563,13 @@ onMounted(async () => {
           <el-form-item label="考核明细日期" prop="detailDate"><el-date-picker v-model="recordForm.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核明细日期" /></el-form-item>
           <el-form-item label="部门" required><el-select v-model="departmentSelection" placeholder="输入部门名称搜索" filterable><el-option v-for="item in enabledDepartments" :key="item.id" :label="item.name" :value="item.id" /><template v-if="addingFromImport"><el-option v-for="name in selectablePendingDepartmentNames" :key="`pending:${name}`" :label="`${name}（待创建）`" :value="`pending:${name}`" /></template></el-select></el-form-item>
           <el-form-item label="姓名" prop="personName"><el-input v-model="recordForm.personName" placeholder="请输入姓名" maxlength="50" /></el-form-item>
-          <el-form-item label="考核金额（元）" prop="amount"><el-input-number v-model="recordForm.amount" :min="0" :precision="2" :step="10" controls-position="right" /></el-form-item>
+          <el-form-item label="考核金额（元）" prop="amount"><el-input-number v-model="recordForm.amount" :min="0.01" :precision="2" :step="10" controls-position="right" placeholder="请输入考核金额" /></el-form-item>
         </div>
         <el-form-item label="考核事由" prop="reason"><el-input v-model="recordForm.reason" placeholder="请输入考核事由" maxlength="300" show-word-limit /></el-form-item>
         <el-form-item label="备注"><el-input v-model="recordForm.remark" type="textarea" :rows="3" placeholder="请输入备注信息" maxlength="500" show-word-limit /></el-form-item>
-        <el-form-item v-if="editingId !== null || addingFromImport" label="收款方式" :required="editingId !== null"><el-radio-group v-model="recordForm.paymentMethodId"><el-radio v-for="item in enabledPaymentMethods" :key="item.id" :value="item.id">{{ item.name }}</el-radio></el-radio-group></el-form-item>
+        <el-form-item label="收款方式"><el-radio-group v-model="recordForm.paymentMethodId"><el-radio :value="0">暂不选择</el-radio><el-radio v-for="item in enabledPaymentMethods" :key="item.id" :value="item.id">{{ item.name }}</el-radio></el-radio-group></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveRecord">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button data-record-save type="primary" :loading="saving" @click="saveRecord">保存</el-button></template>
     </el-dialog>
     <el-dialog v-model="importResultVisible" title="Excel 导入结果" width="min(1460px, 98vw)" destroy-on-close :close-on-click-modal="false" :before-close="beforeCloseImport">
       <template v-if="lastImportResult">
@@ -575,7 +608,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }
+.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }
 .record-form { padding: 2px 4px 0; }.record-form__grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }.record-form :deep(.el-select), .record-form :deep(.el-date-editor), .record-form :deep(.el-input-number) { width: 100%; }
 .import-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }.import-summary > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.import-summary span { color: var(--text-muted); font-size: 13px; }.import-section-title { margin: 14px 0 10px; font-size: 15px; }.import-section-title--error { color: var(--el-color-danger); }
 @media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2, 1fr); } }

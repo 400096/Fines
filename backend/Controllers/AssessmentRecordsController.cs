@@ -17,7 +17,7 @@ namespace FineManagement.Api.Controllers;
 [Route("api/assessment-records")]
 public class AssessmentRecordsController(AppDbContext db, IExcelService excelService) : ControllerBase
 {
-    /// <summary>按日期、明细日期、部门、姓名和状态分页查询考核记录。</summary>
+    /// <summary>按日期、明细日期、部门、姓名、备注和状态分页查询考核记录。</summary>
     [HttpGet]
     public async Task<ActionResult<PagedResult<AssessmentRecordResponse>>> GetList(
         [FromQuery] AssessmentRecordQuery query,
@@ -49,7 +49,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return item is null ? NotFound() : Ok(ToResponse(item));
     }
 
-    /// <summary>新增考核记录；新增时状态固定为待处理。</summary>
+    /// <summary>新增考核记录；收款方式可选，选择后记录自动变为已完成。</summary>
     [HttpPost]
     public async Task<ActionResult<AssessmentRecordResponse>> Create(CreateAssessmentRecordRequest request, CancellationToken cancellationToken)
     {
@@ -57,6 +57,14 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         if (dateValidation is not null) return BadRequest(new { message = dateValidation });
         var department = await db.Departments.SingleOrDefaultAsync(x => x.Id == request.DepartmentId && x.IsEnabled, cancellationToken);
         if (department is null) return BadRequest(new { message = "部门不存在或已停用" });
+
+        PaymentMethod? paymentMethod = null;
+        if (request.PaymentMethodId.HasValue)
+        {
+            paymentMethod = await db.PaymentMethods.SingleOrDefaultAsync(
+                x => x.Id == request.PaymentMethodId.Value && x.IsEnabled, cancellationToken);
+            if (paymentMethod is null) return BadRequest(new { message = "收款方式不存在或已停用" });
+        }
 
         var now = DateTime.UtcNow;
         var entity = new AssessmentRecord
@@ -71,7 +79,9 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             Amount = request.Amount,
             Reason = request.Reason.Trim(),
             Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim(),
-            Status = AssessmentStatus.Pending,
+            PaymentMethodId = paymentMethod?.Id,
+            PaymentMethod = paymentMethod,
+            Status = paymentMethod is null ? AssessmentStatus.Pending : AssessmentStatus.Completed,
             CreatedByUserId = User.GetUserId(),
             CreatedAt = now,
             UpdatedAt = now
@@ -332,6 +342,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         if (departmentIds.Length > 0) records = records.Where(x => departmentIds.Contains(x.DepartmentId));
         else if (query.DepartmentId.HasValue) records = records.Where(x => x.DepartmentId == query.DepartmentId.Value);
         if (!string.IsNullOrWhiteSpace(query.Name)) records = records.Where(x => x.PersonName.Contains(query.Name));
+        var remark = query.Remark?.Trim();
+        if (!string.IsNullOrWhiteSpace(remark)) records = records.Where(x => x.Remark != null && x.Remark.Contains(remark));
         if (query.Status.HasValue) records = records.Where(x => x.Status == query.Status.Value);
         return records;
     }

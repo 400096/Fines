@@ -48,6 +48,7 @@ export interface AssessmentRecordQuery {
   departmentId?: number
   departmentIds?: number[]
   name?: string
+  remark?: string
   status?: AssessmentStatus
   sortBy?: 'assessmentDate' | 'detailDate' | 'departmentName' | 'personName' | 'amount'
   sortOrder?: 'ascending' | 'descending'
@@ -65,11 +66,10 @@ export interface SaveAssessmentRecord {
   amount: number
   reason: string
   remark?: string | null
-}
-
-export interface UpdateAssessmentRecord extends SaveAssessmentRecord {
   paymentMethodId?: number | null
 }
+
+export type UpdateAssessmentRecord = SaveAssessmentRecord
 
 export interface SaveStagedAssessmentRecord {
   assessmentDateType: AssessmentDateType
