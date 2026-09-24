@@ -17,7 +17,7 @@ namespace FineManagement.Api.Controllers;
 [Route("api/assessment-records")]
 public class AssessmentRecordsController(AppDbContext db, IExcelService excelService) : ControllerBase
 {
-    /// <summary>按日期、明细日期、部门、姓名、备注和状态分页查询考核记录。</summary>
+    /// <summary>按日期、录入日期、部门、姓名、备注和状态分页查询考核记录。</summary>
     [HttpGet]
     public async Task<ActionResult<PagedResult<AssessmentRecordResponse>>> GetList(
         [FromQuery] AssessmentRecordQuery query,
@@ -333,7 +333,7 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
 
     private static IQueryable<AssessmentRecord> ApplyFilters(IQueryable<AssessmentRecord> records, AssessmentRecordQuery query)
     {
-        // 区间记录只要与查询区间有重叠即命中；明细日期按财务登记日期筛选。
+        // 区间记录只要与查询区间有重叠即命中；录入日期按财务登记日期筛选。
         if (query.DateFrom.HasValue) records = records.Where(x => (x.AssessmentEndDate ?? x.AssessmentDate) >= query.DateFrom.Value);
         if (query.DateTo.HasValue) records = records.Where(x => x.AssessmentDate <= query.DateTo.Value);
         if (query.DetailDateFrom.HasValue) records = records.Where(x => x.DetailDate >= query.DetailDateFrom.Value);
@@ -387,13 +387,13 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         DateOnly? end,
         DateOnly detailDate)
     {
-        if (!Enum.IsDefined(type)) return "考核日期类型不正确";
-        if (start == default) return "请选择考核日期";
-        if (detailDate == default) return "请选择考核明细日期";
+        if (!Enum.IsDefined(type)) return "单据日期类型不正确";
+        if (start == default) return "请选择单据日期";
+        if (detailDate == default) return "请选择录入日期";
         if (type == AssessmentDateType.Range)
         {
-            if (!end.HasValue) return "请选择考核日期区间的结束日期";
-            if (end.Value < start) return "考核日期区间的结束日期不能早于开始日期";
+            if (!end.HasValue) return "请选择单据日期区间的结束日期";
+            if (end.Value < start) return "单据日期区间的结束日期不能早于开始日期";
         }
         return null;
     }

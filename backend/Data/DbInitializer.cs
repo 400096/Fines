@@ -120,10 +120,10 @@ public static class DbInitializer
                 `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '暂存明细主键',
                 `BatchId` BIGINT NOT NULL COMMENT '所属导入批次主键',
                 `SourceRowNumber` INT NOT NULL DEFAULT 0 COMMENT '原 Excel 行号，手工添加时为0',
-                `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型',
+                `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '单据日期类型',
                 `AssessmentDate` DATE NOT NULL COMMENT '考核开始日期或固定日期',
                 `AssessmentEndDate` DATE NULL COMMENT '考核结束日期',
-                `DetailDate` DATE NOT NULL COMMENT '考核明细日期',
+                `DetailDate` DATE NOT NULL COMMENT '录入日期',
                 `DepartmentId` BIGINT NULL COMMENT '已匹配的部门主键',
                 `DepartmentName` VARCHAR(100) NOT NULL COMMENT 'Excel 中识别出的部门名称',
                 `PersonName` VARCHAR(50) NOT NULL COMMENT '被考核人员姓名',
@@ -149,7 +149,7 @@ public static class DbInitializer
 
     private static async Task EnsureAssessmentDateSchemaAsync(AppDbContext db)
     {
-        // 兼容历史库：补充日期类型、结束日期和财务登记的考核明细日期。
+        // 兼容历史库：补充日期类型、结束日期和财务登记的录入日期。
         var tables = new[] { "AssessmentRecords", "AssessmentImportRows" };
         await db.Database.OpenConnectionAsync();
         try
@@ -160,7 +160,7 @@ public static class DbInitializer
                 if (!await ColumnExistsAsync(connection, table, "AssessmentDateType"))
                 {
                     await using var command = connection.CreateCommand();
-                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型：Fixed固定日期，Range日期区间' AFTER `AssessmentDate`";
+                    command.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '单据日期类型：Fixed固定日期，Range日期区间' AFTER `AssessmentDate`";
                     await command.ExecuteNonQueryAsync();
                 }
 

@@ -76,7 +76,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasComment("考核记录主键");
             entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired()
-                .HasComment("考核日期类型：Fixed固定日期，Range日期区间");
+                .HasComment("单据日期类型：Fixed固定日期，Range日期区间");
             entity.Property(x => x.AssessmentDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
@@ -145,7 +145,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.BatchId).HasComment("所属导入批次主键");
             entity.Property(x => x.SourceRowNumber).HasComment("原 Excel 行号，手工添加时为0");
             entity.Property(x => x.AssessmentDateType).HasConversion<string>().HasMaxLength(20).IsRequired()
-                .HasComment("考核日期类型：Fixed固定日期，Range日期区间");
+                .HasComment("单据日期类型：Fixed固定日期，Range日期区间");
             entity.Property(x => x.AssessmentDate)
                 .HasConversion(
                     date => date.ToDateTime(TimeOnly.MinValue),
@@ -165,7 +165,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     date => DateOnly.FromDateTime(date))
                 .HasColumnType("date")
                 .IsRequired()
-                .HasComment("当前明细分组对应的考核明细日期");
+                .HasComment("当前明细分组对应的录入日期");
             entity.Property(x => x.DepartmentId).HasComment("已匹配的部门主键，未识别时为空");
             entity.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired().HasComment("Excel 中识别出的部门名称");
             entity.Property(x => x.PersonName).HasMaxLength(50).IsRequired().HasComment("被考核人员姓名，允许多个姓名");

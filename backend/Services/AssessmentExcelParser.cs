@@ -55,7 +55,7 @@ public static partial class AssessmentExcelParser
             }
             catch (ArgumentOutOfRangeException)
             {
-                throw new InvalidDataException("考核明细日期格式不正确");
+                throw new InvalidDataException("录入日期格式不正确");
             }
         }
     }
@@ -98,7 +98,7 @@ public static partial class AssessmentExcelParser
                         .Select(reader.GetValue)
                         .ToArray();
 
-                    // “9.7考核明细”是后续记录的明细日期上下文，本身不作为数据行导入。
+                    // “9.7考核明细”是后续记录的录入日期上下文，本身不作为数据行导入。
                     if (TryParseDetailDateHeader(values, out var sectionDetailDate))
                     {
                         currentDetailDate = sectionDetailDate;
@@ -183,7 +183,7 @@ public static partial class AssessmentExcelParser
     private static bool TryCreateHeaderMap(object?[] values, out HeaderMap? header)
     {
         var normalized = values.Select(value => NormalizeHeader(GetText(value))).ToArray();
-        var date = FindColumn(normalized, "日期", "考核日期");
+        var date = FindColumn(normalized, "日期", "单据日期");
         var department = FindColumn(normalized, "部门", "部门名称", "部门编码");
         var personName = FindColumn(normalized, "姓名", "人员", "员工姓名");
         var amount = FindColumnByContains(normalized, "金额");
@@ -294,23 +294,23 @@ public static partial class AssessmentExcelParser
             {
                 var start = new DateOnly(year, startMonth, startDay);
                 var end = new DateOnly(year, endMonth, endDay);
-                if (end < start) throw new InvalidDataException("考核日期区间的结束日期不能早于开始日期");
+                if (end < start) throw new InvalidDataException("单据日期区间的结束日期不能早于开始日期");
                 return new ParsedAssessmentDate(AssessmentDateType.Range, start, end);
             }
             catch (ArgumentOutOfRangeException)
             {
-                throw new InvalidDataException("考核日期格式不正确");
+                throw new InvalidDataException("单据日期格式不正确");
             }
         }
 
         if (AssessmentDateRangeIntentRegex().IsMatch(text))
-            throw new InvalidDataException("考核日期区间格式不正确，请使用如 2026/9/4-6 的格式");
+            throw new InvalidDataException("单据日期区间格式不正确，请使用如 2026/9/4-6 的格式");
 
         if (DateOnly.TryParse(text, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out var fixedDate))
             return new ParsedAssessmentDate(AssessmentDateType.Fixed, fixedDate, null);
         if (DateTime.TryParse(text, CultureInfo.GetCultureInfo("zh-CN"), DateTimeStyles.None, out dateTime))
             return new ParsedAssessmentDate(AssessmentDateType.Fixed, DateOnly.FromDateTime(dateTime), null);
-        throw new InvalidDataException("考核日期格式不正确");
+        throw new InvalidDataException("单据日期格式不正确");
     }
 
     private static decimal ParseAmount(object? value)

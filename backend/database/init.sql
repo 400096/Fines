@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS `Users`
 CREATE TABLE IF NOT EXISTS `AssessmentRecords`
 (
     `Id`                 BIGINT NOT NULL AUTO_INCREMENT COMMENT '考核记录主键',
-    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型：Fixed固定日期，Range日期区间',
+    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '单据日期类型：Fixed固定日期，Range日期区间',
     `AssessmentDate`     DATE NOT NULL COMMENT '考核开始日期或固定日期',
     `AssessmentEndDate`  DATE NULL COMMENT '考核结束日期，仅日期区间类型使用',
     `DetailDate`         DATE NOT NULL COMMENT '考核明细到达财务并登记的日期',
@@ -121,10 +121,10 @@ CREATE TABLE IF NOT EXISTS `AssessmentImportRows`
     `Id`                 BIGINT NOT NULL AUTO_INCREMENT COMMENT '暂存明细主键',
     `BatchId`            BIGINT NOT NULL COMMENT '所属导入批次主键',
     `SourceRowNumber`    INT NOT NULL DEFAULT 0 COMMENT '原 Excel 行号，手工添加时为0',
-    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '考核日期类型：Fixed固定日期，Range日期区间',
+    `AssessmentDateType` VARCHAR(20) NOT NULL DEFAULT 'Fixed' COMMENT '单据日期类型：Fixed固定日期，Range日期区间',
     `AssessmentDate`     DATE NOT NULL COMMENT '考核开始日期或固定日期',
     `AssessmentEndDate`  DATE NULL COMMENT '考核结束日期，仅日期区间类型使用',
-    `DetailDate`         DATE NOT NULL COMMENT '当前明细分组对应的考核明细日期',
+    `DetailDate`         DATE NOT NULL COMMENT '当前明细分组对应的录入日期',
     `DepartmentId`       BIGINT NULL COMMENT '已匹配的部门主键，未识别时为空',
     `DepartmentName`     VARCHAR(100) NOT NULL COMMENT 'Excel 中识别出的部门名称',
     `PersonName`         VARCHAR(50) NOT NULL COMMENT '被考核人员姓名，允许多个姓名',

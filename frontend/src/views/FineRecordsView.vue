@@ -13,7 +13,7 @@ import { consumePendingImportFile } from '@/utils/importTransfer'
 
 const route = useRoute()
 const router = useRouter()
-// 筛选条件直接映射后端查询 DTO；部门支持多选，明细日期为单日筛选。
+// 筛选条件直接映射后端查询 DTO；部门支持多选，录入日期为单日筛选。
 const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', remark: '', status: '' })
 const records = ref<AssessmentRecord[]>([])
 const departments = ref<Department[]>([])
@@ -43,8 +43,8 @@ const recordForm = reactive({
   reason: '', remark: '', paymentMethodId: undefined as number | undefined,
 })
 const rules: FormRules<typeof recordForm> = {
-  assessmentDate: [{ required: true, message: '请选择考核日期', trigger: 'change' }],
-  detailDate: [{ required: true, message: '请选择考核明细日期', trigger: 'change' }],
+  assessmentDate: [{ required: true, message: '请选择单据日期', trigger: 'change' }],
+  detailDate: [{ required: true, message: '请选择录入日期', trigger: 'change' }],
   personName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   amount: [{ required: true, type: 'number', min: 0.01, message: '请输入大于 0 的考核金额', trigger: 'change' }],
   reason: [{ required: true, message: '请输入考核事由', trigger: 'blur' }],
@@ -317,7 +317,7 @@ async function saveRecord() {
     return
   }
   if (recordForm.assessmentDateType === 'Range' && !recordForm.assessmentEndDate) {
-    ElMessage.warning('请选择考核日期区间的结束日期')
+    ElMessage.warning('请选择单据日期区间的结束日期')
     return
   }
   if (recordForm.assessmentDateType === 'Range' && recordForm.assessmentEndDate < recordForm.assessmentDate) {
@@ -438,7 +438,7 @@ async function processImportFile(file: File) {
     })
     if (missingNewDateFields) {
       await assessmentApi.cancelImport(result.batchId).catch(() => undefined)
-      ElMessage.error('当前运行的后端版本过旧，未返回日期类型、结束日期或考核明细日期。请更新并重启后端后重新导入')
+      ElMessage.error('当前运行的后端版本过旧，未返回日期类型、结束日期或录入日期。请更新并重启后端后重新导入')
       return
     }
     const stagedRows = (result.stagedRows ?? []).map(row => ({
@@ -541,8 +541,8 @@ onMounted(async () => {
     <PageTitle title="考核记录" subtitle="查询、整理与导出考核明细" :icon="Document" />
     <section class="card filter-card">
       <el-form label-position="top" :model="filters"><div class="filter-grid">
-        <el-form-item label="考核日期"><el-date-picker v-model="filters.dates" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
-        <el-form-item label="考核明细日期"><el-date-picker v-model="filters.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核明细日期" clearable /></el-form-item>
+        <el-form-item label="单据日期"><el-date-picker v-model="filters.dates" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
+        <el-form-item label="录入日期"><el-date-picker v-model="filters.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择录入日期" clearable /></el-form-item>
         <el-form-item label="部门"><el-select v-model="filters.departmentIds" placeholder="输入部门名称搜索" multiple clearable filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="1"><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
         <el-form-item label="姓名"><el-input v-model="filters.name" placeholder="请输入姓名" @keyup.enter="query" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="filters.remark" placeholder="请输入备注关键字" clearable @keyup.enter="query" /></el-form-item>
@@ -551,16 +551,16 @@ onMounted(async () => {
     </section>
     <section class="card table-card">
       <div class="table-card__head"><h2>▤　考核记录 <small>共 {{ total }} 条记录</small></h2><el-button :icon="Refresh" :loading="loading" @click="loadRecords">刷新</el-button></div>
-      <el-table v-loading="loading" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="考核日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="考核明细日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
+      <el-table v-loading="loading" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
       <div class="pagination"><span>共 {{ total }} 条记录</span><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
     </section>
     <el-dialog v-model="dialogVisible" :title="addingFromImport ? (editingStagingId === null ? '添加待导入记录' : '编辑待导入记录') : (editingId === null ? '新增考核记录' : '编辑考核记录')" width="min(640px, 92vw)" destroy-on-close>
       <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top" @keydown.enter="focusNextFormItem">
         <div class="record-form__grid">
-          <el-form-item label="考核日期类型"><el-radio-group v-model="recordForm.assessmentDateType"><el-radio-button value="Fixed">固定日期</el-radio-button><el-radio-button value="Range">日期区间</el-radio-button></el-radio-group></el-form-item>
-          <el-form-item v-if="recordForm.assessmentDateType === 'Fixed'" label="考核日期" prop="assessmentDate"><el-date-picker v-model="recordForm.assessmentDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核日期" /></el-form-item>
-          <el-form-item v-else label="考核日期区间" required><el-date-picker :model-value="[recordForm.assessmentDate, recordForm.assessmentEndDate]" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" @update:model-value="updateAssessmentRange" /></el-form-item>
-          <el-form-item label="考核明细日期" prop="detailDate"><el-date-picker v-model="recordForm.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择考核明细日期" /></el-form-item>
+          <el-form-item label="单据日期类型"><el-radio-group v-model="recordForm.assessmentDateType"><el-radio-button value="Fixed">固定日期</el-radio-button><el-radio-button value="Range">日期区间</el-radio-button></el-radio-group></el-form-item>
+          <el-form-item v-if="recordForm.assessmentDateType === 'Fixed'" label="单据日期" prop="assessmentDate"><el-date-picker v-model="recordForm.assessmentDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择单据日期" /></el-form-item>
+          <el-form-item v-else label="单据日期区间" required><el-date-picker :model-value="[recordForm.assessmentDate, recordForm.assessmentEndDate]" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" @update:model-value="updateAssessmentRange" /></el-form-item>
+          <el-form-item label="录入日期" prop="detailDate"><el-date-picker v-model="recordForm.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择录入日期" /></el-form-item>
           <el-form-item label="部门" required><el-select v-model="departmentSelection" placeholder="输入部门名称搜索" filterable><el-option v-for="item in enabledDepartments" :key="item.id" :label="item.name" :value="item.id" /><template v-if="addingFromImport"><el-option v-for="name in selectablePendingDepartmentNames" :key="`pending:${name}`" :label="`${name}（待创建）`" :value="`pending:${name}`" /></template></el-select></el-form-item>
           <el-form-item label="姓名" prop="personName"><el-input v-model="recordForm.personName" placeholder="请输入姓名" maxlength="50" /></el-form-item>
           <el-form-item label="考核金额（元）" prop="amount"><el-input-number v-model="recordForm.amount" :min="0.01" :precision="2" :step="10" controls-position="right" placeholder="请输入考核金额" /></el-form-item>
@@ -577,8 +577,8 @@ onMounted(async () => {
         <h3 class="import-section-title">待确认导入的数据</h3>
         <el-table :data="orderedStagedRows" stripe border max-height="480" empty-text="没有可确认导入的数据">
           <el-table-column prop="rowNumber" label="来源" width="82"><template #default="{ row }">{{ row.rowNumber > 0 ? `第 ${row.rowNumber} 行` : '手动添加' }}</template></el-table-column>
-          <el-table-column label="考核日期" width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column>
-          <el-table-column prop="detailDate" label="明细日期" width="115" />
+          <el-table-column label="单据日期" width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column>
+          <el-table-column prop="detailDate" label="录入日期" width="115" />
           <el-table-column prop="departmentName" label="部门" min-width="120" />
           <el-table-column prop="personName" label="姓名" min-width="145" />
           <el-table-column label="金额（元）" min-width="150"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column>
@@ -591,8 +591,8 @@ onMounted(async () => {
           <h3 class="import-section-title import-section-title--error">导入失败的数据</h3>
           <el-table :data="lastImportResult.failedRows" stripe border max-height="300">
             <el-table-column prop="rowNumber" label="Excel 行" width="82" />
-            <el-table-column prop="assessmentDate" label="考核日期原文" width="135" />
-            <el-table-column prop="detailDate" label="明细日期" width="105" />
+            <el-table-column prop="assessmentDate" label="单据日期原文" width="135" />
+            <el-table-column prop="detailDate" label="录入日期" width="105" />
             <el-table-column prop="departmentName" label="部门原文" min-width="120" />
             <el-table-column prop="personName" label="姓名原文" min-width="130" />
             <el-table-column prop="amountText" label="金额原文" min-width="135" />
