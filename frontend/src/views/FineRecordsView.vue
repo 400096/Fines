@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 考核记录主页面：负责筛选、分页排序、增删改、Excel 暂存确认和导出。
 import { Document, Download, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -31,6 +31,7 @@ const sortOrder = ref<NonNullable<AssessmentRecordQuery['sortOrder']>>('descendi
 const selectedRecords = ref<AssessmentRecord[]>([])
 const selectedAmountTotal = computed(() => selectedRecords.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogVisible = ref(false)
+const batchAdding = ref(false)
 const importResultVisible = ref(false)
 const lastImportResult = ref<ExcelImportResult | null>(null)
 const manualFailedRow = ref<ExcelImportFailedRow | null>(null)
@@ -38,6 +39,7 @@ const addingFromImport = ref(false)
 const editingId = ref<number | null>(null)
 const editingStagingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
+const recordsTableRef = ref<TableInstance>()
 const fileInput = ref<HTMLInputElement>()
 const departmentKeyword = ref('')
 interface PersonNameSuggestion { value: string }
@@ -220,8 +222,14 @@ function changeSort({ prop, order }: { prop: string; order: 'ascending' | 'desce
 function changeSelection(rows: AssessmentRecord[]) {
   selectedRecords.value = rows
 }
+function toggleRowSelection(row: AssessmentRecord, _column: unknown, event: Event) {
+  const target = event.target as HTMLElement
+  if (target.closest('.el-checkbox, button, a')) return
+  recordsTableRef.value?.toggleRowSelection(row)
+}
 function openCreate() {
   departmentKeyword.value = ''
+  batchAdding.value = false
   addingFromImport.value = false
   manualFailedRow.value = null
   editingId.value = null
@@ -236,6 +244,7 @@ function openCreate() {
 }
 function openEdit(row: AssessmentRecord) {
   departmentKeyword.value = ''
+  batchAdding.value = false
   addingFromImport.value = false
   manualFailedRow.value = null
   editingId.value = row.id
@@ -259,6 +268,7 @@ function openEdit(row: AssessmentRecord) {
 }
 function openImportedEdit(row: ExcelStagedRow) {
   departmentKeyword.value = ''
+  batchAdding.value = false
   addingFromImport.value = true
   manualFailedRow.value = null
   editingId.value = null
@@ -282,6 +292,7 @@ function openImportedEdit(row: ExcelStagedRow) {
 }
 function openManualImportAdd() {
   departmentKeyword.value = ''
+  batchAdding.value = false
   addingFromImport.value = true
   manualFailedRow.value = null
   editingId.value = null
@@ -338,6 +349,7 @@ function parseImportedAmount(value: string | null) {
 }
 function openFailedAdd(row: ExcelImportFailedRow) {
   departmentKeyword.value = ''
+  batchAdding.value = false
   addingFromImport.value = true
   manualFailedRow.value = row
   editingId.value = null
@@ -395,6 +407,7 @@ async function saveRecord() {
     remark: recordForm.remark.trim() || null,
     paymentMethodId: recordForm.paymentMethodId || null,
   }
+  const shouldContinueBatch = !addingFromImport.value && editingId.value === null && batchAdding.value
   saving.value = true
   try {
     if (addingFromImport.value) {
@@ -433,6 +446,16 @@ async function saveRecord() {
     } else {
       await assessmentApi.update(editingId.value, baseData)
       ElMessage.success('考核记录已更新')
+    }
+    if (shouldContinueBatch) {
+      Object.assign(recordForm, {
+        personName: '', amount: undefined, reason: '', remark: '',
+      })
+      await loadRecords()
+      await nextTick()
+      formRef.value?.clearValidate()
+      document.querySelector<HTMLInputElement>('.record-form [data-field="person-name"] input')?.focus()
+      return
     }
     const wasStaging = addingFromImport.value
     manualFailedRow.value = null
@@ -610,7 +633,7 @@ onMounted(async () => {
     </section>
     <section class="card table-card">
       <div class="table-card__head"><h2>▤　考核记录 <small>共 {{ total }} 条记录</small></h2><el-button :icon="Refresh" :loading="loading" @click="loadRecords">刷新</el-button></div>
-      <el-table v-loading="loading" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort" @selection-change="changeSelection"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
+      <el-table ref="recordsTableRef" v-loading="loading" class="records-table" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort" @selection-change="changeSelection" @row-click="toggleRowSelection"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click.stop="openEdit(row)">编辑</el-button><el-button link type="danger" @click.stop="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
       <div class="pagination"><div class="pagination__summary"><span>已选 {{ selectedRecords.length }} 条数据，金额合计：<strong>¥{{ formatMoney(selectedAmountTotal) }}</strong></span></div><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
     </section>
     <el-dialog v-model="dialogVisible" :title="addingFromImport ? (editingStagingId === null ? '添加待导入记录' : '编辑待导入记录') : (editingId === null ? '新增考核记录' : '编辑考核记录')" width="min(640px, 92vw)" destroy-on-close>
@@ -621,14 +644,14 @@ onMounted(async () => {
           <el-form-item v-else label="单据日期区间" required><el-date-picker :model-value="[recordForm.assessmentDate, recordForm.assessmentEndDate]" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" @update:model-value="updateAssessmentRange" /></el-form-item>
           <el-form-item label="录入日期" prop="detailDate"><el-date-picker v-model="recordForm.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择录入日期" /></el-form-item>
           <el-form-item label="部门" required data-field="department"><el-select v-model="departmentSelection" placeholder="输入部门名称或编码搜索" filterable :filter-method="filterDepartments" @visible-change="handleDepartmentVisibleChange"><el-option v-for="item in filteredEnabledDepartments" :key="item.id" :label="item.name" :value="item.id" /><template v-if="addingFromImport"><el-option v-for="name in filteredPendingDepartmentNames" :key="`pending:${name}`" :label="`${name}（待创建）`" :value="`pending:${name}`" /></template></el-select></el-form-item>
-          <el-form-item label="姓名" prop="personName"><el-autocomplete v-model="recordForm.personName" :fetch-suggestions="queryPersonNameSuggestions" placeholder="请输入姓名" maxlength="50" clearable /></el-form-item>
+          <el-form-item label="姓名" prop="personName" data-field="person-name"><el-autocomplete v-model="recordForm.personName" :fetch-suggestions="queryPersonNameSuggestions" placeholder="请输入姓名" maxlength="50" clearable /></el-form-item>
           <el-form-item label="考核金额（元）" prop="amount"><el-input-number v-model="recordForm.amount" :min="0.01" :precision="2" :step="10" controls-position="right" placeholder="请输入考核金额" /></el-form-item>
         </div>
         <el-form-item label="考核事由" prop="reason"><el-input v-model="recordForm.reason" placeholder="请输入考核事由" maxlength="300" show-word-limit /></el-form-item>
         <el-form-item label="备注"><el-input v-model="recordForm.remark" type="textarea" :rows="3" placeholder="请输入备注信息" maxlength="500" show-word-limit /></el-form-item>
         <el-form-item label="收款方式"><el-radio-group v-model="recordForm.paymentMethodId"><el-radio :value="0">暂不选择</el-radio><el-radio v-for="item in enabledPaymentMethods" :key="item.id" :value="item.id">{{ item.name }}</el-radio></el-radio-group></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button data-record-save type="primary" :loading="saving" @click="saveRecord">保存</el-button></template>
+      <template #footer><el-checkbox v-if="!addingFromImport && editingId === null" v-model="batchAdding" class="batch-add-checkbox">批量添加</el-checkbox><el-button @click="dialogVisible = false">取消</el-button><el-button data-record-save type="primary" :loading="saving" @click="saveRecord">保存</el-button></template>
     </el-dialog>
     <el-dialog v-model="importResultVisible" title="Excel 导入结果" width="min(1460px, 98vw)" destroy-on-close :close-on-click-modal="false" :before-close="beforeCloseImport">
       <template v-if="lastImportResult">
@@ -667,8 +690,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }.pagination__summary { display: flex; align-items: center; gap: 20px; }.pagination__summary strong { color: var(--primary); font-size: 15px; }
+.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.records-table :deep(.el-table__body tr) { cursor: pointer; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }.pagination__summary { display: flex; align-items: center; gap: 20px; }.pagination__summary strong { color: var(--primary); font-size: 15px; }
 .record-form { padding: 2px 4px 0; }.record-form__grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }.record-form :deep(.el-select), .record-form :deep(.el-autocomplete), .record-form :deep(.el-date-editor), .record-form :deep(.el-input-number) { width: 100%; }
+.batch-add-checkbox { margin-right: 18px; }
 .import-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }.import-summary > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.import-summary span { color: var(--text-muted); font-size: 13px; }.import-section-title { margin: 14px 0 10px; font-size: 15px; }.import-section-title--error { color: var(--el-color-danger); }
 @media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 650px) { .filter-grid, .record-form__grid { grid-template-columns: 1fr; }.pagination { align-items: flex-start; flex-direction: column; gap: 12px; } }
