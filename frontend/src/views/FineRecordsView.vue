@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { assessmentApi, departmentApi, paymentMethodApi } from '@/api/services'
 import type { AssessmentDateType, AssessmentRecord, AssessmentRecordQuery, AssessmentStatus, Department, ExcelStagedRow, ExcelImportFailedRow, ExcelImportResult, PaymentMethod } from '@/api/types'
 import PageTitle from '@/components/PageTitle.vue'
-import { todayString } from '@/utils/format'
+import { formatMoney, todayString } from '@/utils/format'
 import { consumePendingImportFile } from '@/utils/importTransfer'
 
 const route = useRoute()
@@ -28,6 +28,8 @@ const page = ref(1)
 const pageSize = ref(10)
 const sortBy = ref<NonNullable<AssessmentRecordQuery['sortBy']>>('assessmentDate')
 const sortOrder = ref<NonNullable<AssessmentRecordQuery['sortOrder']>>('descending')
+const selectedRecords = ref<AssessmentRecord[]>([])
+const selectedAmountTotal = computed(() => selectedRecords.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogVisible = ref(false)
 const importResultVisible = ref(false)
 const lastImportResult = ref<ExcelImportResult | null>(null)
@@ -37,6 +39,8 @@ const editingId = ref<number | null>(null)
 const editingStagingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const fileInput = ref<HTMLInputElement>()
+const departmentKeyword = ref('')
+interface PersonNameSuggestion { value: string }
 const recordForm = reactive({
   assessmentDateType: 'Fixed' as AssessmentDateType, assessmentDate: '', assessmentEndDate: '', detailDate: '',
   departmentId: 0, departmentName: '', personName: '', amount: undefined as number | undefined,
@@ -69,6 +73,14 @@ const selectablePendingDepartmentNames = computed(() => Array.from(new Set([
     ? [recordForm.departmentName]
     : []),
 ])))
+const matchesDepartmentKeyword = (name: string) => {
+  const keyword = departmentKeyword.value.replace(/\s/g, '').toLocaleLowerCase()
+  return !keyword || name.replace(/\s/g, '').toLocaleLowerCase().includes(keyword)
+}
+const filteredEnabledDepartments = computed(() => enabledDepartments.value.filter(
+  item => matchesDepartmentKeyword(item.name) || matchesDepartmentKeyword(item.code),
+))
+const filteredPendingDepartmentNames = computed(() => selectablePendingDepartmentNames.value.filter(matchesDepartmentKeyword))
 const departmentSelection = computed<number | string>({
   get: () => recordForm.departmentId || (recordForm.departmentName ? `pending:${recordForm.departmentName}` : ''),
   set: (value) => {
@@ -82,6 +94,41 @@ const departmentSelection = computed<number | string>({
   },
 })
 
+function filterDepartments(value: string) {
+  departmentKeyword.value = value.trim()
+}
+
+function handleDepartmentVisibleChange(visible: boolean) {
+  if (!visible) departmentKeyword.value = ''
+}
+
+function selectUniqueDepartment() {
+  if (!departmentKeyword.value) return Boolean(departmentSelection.value)
+  const options: Array<number | string> = [
+    ...filteredEnabledDepartments.value.map(item => item.id),
+    ...(addingFromImport.value
+      ? filteredPendingDepartmentNames.value.map(name => `pending:${name}`)
+      : []),
+  ]
+  if (options.length !== 1) return false
+  departmentSelection.value = options[0]
+  departmentKeyword.value = ''
+  return true
+}
+
+async function queryPersonNameSuggestions(
+  queryString: string,
+  callback: (suggestions: PersonNameSuggestion[]) => void,
+) {
+  try {
+    const names = await assessmentApi.personNameSuggestions(queryString.trim())
+    callback(names.map(value => ({ value })))
+  } catch {
+    // 自动补全失败不阻止用户继续手工输入姓名。
+    callback([])
+  }
+}
+
 function focusNextFormItem(event: KeyboardEvent) {
   if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return
   if (event.target instanceof HTMLTextAreaElement && event.shiftKey) return
@@ -90,6 +137,9 @@ function focusNextFormItem(event: KeyboardEvent) {
   const form = target.closest<HTMLElement>('.record-form')
   const currentItem = target.closest<HTMLElement>('.el-form-item')
   if (!form || !currentItem) return
+
+  // 部门只在过滤结果唯一时自动选择；仍有多项时保留下拉框供用户继续选择。
+  if (currentItem.dataset.field === 'department' && !selectUniqueDepartment()) return
 
   const items = Array.from(form.querySelectorAll<HTMLElement>('.el-form-item'))
     .filter(item => item.offsetParent !== null)
@@ -130,6 +180,7 @@ function buildQuery(withPaging = true): AssessmentRecordQuery {
 }
 async function loadRecords() {
   loading.value = true
+  selectedRecords.value = []
   try {
     const result = await assessmentApi.list(buildQuery())
     records.value = result.items
@@ -166,7 +217,11 @@ function changeSort({ prop, order }: { prop: string; order: 'ascending' | 'desce
   page.value = 1
   void loadRecords()
 }
+function changeSelection(rows: AssessmentRecord[]) {
+  selectedRecords.value = rows
+}
 function openCreate() {
+  departmentKeyword.value = ''
   addingFromImport.value = false
   manualFailedRow.value = null
   editingId.value = null
@@ -180,6 +235,7 @@ function openCreate() {
   nextTick(() => formRef.value?.clearValidate())
 }
 function openEdit(row: AssessmentRecord) {
+  departmentKeyword.value = ''
   addingFromImport.value = false
   manualFailedRow.value = null
   editingId.value = row.id
@@ -202,6 +258,7 @@ function openEdit(row: AssessmentRecord) {
   nextTick(() => formRef.value?.clearValidate())
 }
 function openImportedEdit(row: ExcelStagedRow) {
+  departmentKeyword.value = ''
   addingFromImport.value = true
   manualFailedRow.value = null
   editingId.value = null
@@ -224,6 +281,7 @@ function openImportedEdit(row: ExcelStagedRow) {
   nextTick(() => formRef.value?.clearValidate())
 }
 function openManualImportAdd() {
+  departmentKeyword.value = ''
   addingFromImport.value = true
   manualFailedRow.value = null
   editingId.value = null
@@ -279,6 +337,7 @@ function parseImportedAmount(value: string | null) {
   return match ? Number(match[0]) : undefined
 }
 function openFailedAdd(row: ExcelImportFailedRow) {
+  departmentKeyword.value = ''
   addingFromImport.value = true
   manualFailedRow.value = row
   editingId.value = null
@@ -551,18 +610,18 @@ onMounted(async () => {
     </section>
     <section class="card table-card">
       <div class="table-card__head"><h2>▤　考核记录 <small>共 {{ total }} 条记录</small></h2><el-button :icon="Refresh" :loading="loading" @click="loadRecords">刷新</el-button></div>
-      <el-table v-loading="loading" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
-      <div class="pagination"><span>共 {{ total }} 条记录</span><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
+      <el-table v-loading="loading" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort" @selection-change="changeSelection"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
+      <div class="pagination"><div class="pagination__summary"><span>已选 {{ selectedRecords.length }} 条数据，金额合计：<strong>¥{{ formatMoney(selectedAmountTotal) }}</strong></span></div><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
     </section>
     <el-dialog v-model="dialogVisible" :title="addingFromImport ? (editingStagingId === null ? '添加待导入记录' : '编辑待导入记录') : (editingId === null ? '新增考核记录' : '编辑考核记录')" width="min(640px, 92vw)" destroy-on-close>
-      <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top" @keydown.enter="focusNextFormItem">
+      <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top" @keyup.enter.capture="focusNextFormItem">
         <div class="record-form__grid">
           <el-form-item label="单据日期类型"><el-radio-group v-model="recordForm.assessmentDateType"><el-radio-button value="Fixed">固定日期</el-radio-button><el-radio-button value="Range">日期区间</el-radio-button></el-radio-group></el-form-item>
           <el-form-item v-if="recordForm.assessmentDateType === 'Fixed'" label="单据日期" prop="assessmentDate"><el-date-picker v-model="recordForm.assessmentDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择单据日期" /></el-form-item>
           <el-form-item v-else label="单据日期区间" required><el-date-picker :model-value="[recordForm.assessmentDate, recordForm.assessmentEndDate]" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" @update:model-value="updateAssessmentRange" /></el-form-item>
           <el-form-item label="录入日期" prop="detailDate"><el-date-picker v-model="recordForm.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择录入日期" /></el-form-item>
-          <el-form-item label="部门" required><el-select v-model="departmentSelection" placeholder="输入部门名称搜索" filterable><el-option v-for="item in enabledDepartments" :key="item.id" :label="item.name" :value="item.id" /><template v-if="addingFromImport"><el-option v-for="name in selectablePendingDepartmentNames" :key="`pending:${name}`" :label="`${name}（待创建）`" :value="`pending:${name}`" /></template></el-select></el-form-item>
-          <el-form-item label="姓名" prop="personName"><el-input v-model="recordForm.personName" placeholder="请输入姓名" maxlength="50" /></el-form-item>
+          <el-form-item label="部门" required data-field="department"><el-select v-model="departmentSelection" placeholder="输入部门名称或编码搜索" filterable :filter-method="filterDepartments" @visible-change="handleDepartmentVisibleChange"><el-option v-for="item in filteredEnabledDepartments" :key="item.id" :label="item.name" :value="item.id" /><template v-if="addingFromImport"><el-option v-for="name in filteredPendingDepartmentNames" :key="`pending:${name}`" :label="`${name}（待创建）`" :value="`pending:${name}`" /></template></el-select></el-form-item>
+          <el-form-item label="姓名" prop="personName"><el-autocomplete v-model="recordForm.personName" :fetch-suggestions="queryPersonNameSuggestions" placeholder="请输入姓名" maxlength="50" clearable /></el-form-item>
           <el-form-item label="考核金额（元）" prop="amount"><el-input-number v-model="recordForm.amount" :min="0.01" :precision="2" :step="10" controls-position="right" placeholder="请输入考核金额" /></el-form-item>
         </div>
         <el-form-item label="考核事由" prop="reason"><el-input v-model="recordForm.reason" placeholder="请输入考核事由" maxlength="300" show-word-limit /></el-form-item>
@@ -608,8 +667,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }
-.record-form { padding: 2px 4px 0; }.record-form__grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }.record-form :deep(.el-select), .record-form :deep(.el-date-editor), .record-form :deep(.el-input-number) { width: 100%; }
+.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }.pagination__summary { display: flex; align-items: center; gap: 20px; }.pagination__summary strong { color: var(--primary); font-size: 15px; }
+.record-form { padding: 2px 4px 0; }.record-form__grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }.record-form :deep(.el-select), .record-form :deep(.el-autocomplete), .record-form :deep(.el-date-editor), .record-form :deep(.el-input-number) { width: 100%; }
 .import-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }.import-summary > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.import-summary span { color: var(--text-muted); font-size: 13px; }.import-section-title { margin: 14px 0 10px; font-size: 15px; }.import-section-title--error { color: var(--el-color-danger); }
 @media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 650px) { .filter-grid, .record-form__grid { grid-template-columns: 1fr; }.pagination { align-items: flex-start; flex-direction: column; gap: 12px; } }

@@ -8,7 +8,15 @@
     <!-- 生成 XML 文档供 Swagger 展示接口注释；未注释成员不产生编译警告。 -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- 发布输出目录位于项目内时，避免旧发布文件被再次作为内容递归打包。 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);deploy\**;backdist\**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 双重排除内容项，确保 dotnet publish 不复制这两个目录。 -->
+    <Content Remove="deploy\**;backdist\**" />
+    <None Remove="deploy\**;backdist\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.1" />

@@ -34,6 +34,9 @@ export const assessmentApi = {
   list: (params: AssessmentRecordQuery) => request<PagedResult<AssessmentRecord>>({
     method: 'GET', url: '/assessment-records', params, paramsSerializer: { indexes: null },
   }),
+  personNameSuggestions: (keyword: string, limit = 10) => request<string[]>({
+    method: 'GET', url: '/assessment-records/person-name-suggestions', params: { keyword, limit },
+  }),
   create: (data: SaveAssessmentRecord) => request<AssessmentRecord>({
     method: 'POST', url: '/assessment-records', data,
   }),

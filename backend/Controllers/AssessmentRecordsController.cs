@@ -38,6 +38,38 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return Ok(new PagedResult<AssessmentRecordResponse>(items, total, query.Page, query.PageSize));
     }
 
+    /// <summary>按输入内容返回最近使用过的姓名，供新增和编辑记录时自动补全。</summary>
+    [HttpGet("person-name-suggestions")]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetPersonNameSuggestions(
+        [FromQuery] string? keyword,
+        [FromQuery] int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedKeyword = keyword?.Trim();
+        var take = Math.Clamp(limit, 1, 20);
+        var records = db.AssessmentRecords.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            records = records.Where(x => x.PersonName.Contains(normalizedKeyword));
+        }
+
+        var names = await records
+            .GroupBy(x => x.PersonName)
+            .Select(group => new
+            {
+                Name = group.Key,
+                LastUsedAt = group.Max(x => x.UpdatedAt)
+            })
+            .OrderByDescending(item => item.LastUsedAt)
+            .ThenBy(item => item.Name)
+            .Take(take)
+            .Select(item => item.Name)
+            .ToListAsync(cancellationToken);
+
+        return Ok(names);
+    }
+
     /// <summary>获取一条考核记录的完整信息。</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<AssessmentRecordResponse>> GetById(long id, CancellationToken cancellationToken)
