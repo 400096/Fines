@@ -17,7 +17,7 @@ namespace FineManagement.Api.Controllers;
 [Route("api/assessment-records")]
 public class AssessmentRecordsController(AppDbContext db, IExcelService excelService) : ControllerBase
 {
-    /// <summary>按日期、录入日期、部门、姓名、备注和状态分页查询考核记录。</summary>
+    /// <summary>按日期、录入日期、部门、姓名、事由、备注和状态分页查询考核记录。</summary>
     [HttpGet]
     public async Task<ActionResult<PagedResult<AssessmentRecordResponse>>> GetList(
         [FromQuery] AssessmentRecordQuery query,
@@ -374,6 +374,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         if (departmentIds.Length > 0) records = records.Where(x => departmentIds.Contains(x.DepartmentId));
         else if (query.DepartmentId.HasValue) records = records.Where(x => x.DepartmentId == query.DepartmentId.Value);
         if (!string.IsNullOrWhiteSpace(query.Name)) records = records.Where(x => x.PersonName.Contains(query.Name));
+        var reason = query.Reason?.Trim();
+        if (!string.IsNullOrWhiteSpace(reason)) records = records.Where(x => x.Reason.Contains(reason));
         var remark = query.Remark?.Trim();
         if (!string.IsNullOrWhiteSpace(remark)) records = records.Where(x => x.Remark != null && x.Remark.Contains(remark));
         if (query.Status.HasValue) records = records.Where(x => x.Status == query.Status.Value);

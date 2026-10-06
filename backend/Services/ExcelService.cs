@@ -275,6 +275,8 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         if (departmentIds.Length > 0) recordsQuery = recordsQuery.Where(x => departmentIds.Contains(x.DepartmentId));
         else if (query.DepartmentId.HasValue) recordsQuery = recordsQuery.Where(x => x.DepartmentId == query.DepartmentId.Value);
         if (!string.IsNullOrWhiteSpace(query.Name)) recordsQuery = recordsQuery.Where(x => x.PersonName.Contains(query.Name));
+        var reason = query.Reason?.Trim();
+        if (!string.IsNullOrWhiteSpace(reason)) recordsQuery = recordsQuery.Where(x => x.Reason.Contains(reason));
         var remark = query.Remark?.Trim();
         if (!string.IsNullOrWhiteSpace(remark)) recordsQuery = recordsQuery.Where(x => x.Remark != null && x.Remark.Contains(remark));
         if (query.Status.HasValue) recordsQuery = recordsQuery.Where(x => x.Status == query.Status.Value);

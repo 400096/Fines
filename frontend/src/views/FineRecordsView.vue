@@ -14,7 +14,7 @@ import { consumePendingImportFile } from '@/utils/importTransfer'
 const route = useRoute()
 const router = useRouter()
 // 筛选条件直接映射后端查询 DTO；部门支持多选，录入日期为单日筛选。
-const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', remark: '', status: '' })
+const filters = reactive({ dates: [] as string[], detailDate: '', departmentIds: [] as number[], name: '', reason: '', remark: '', status: '' })
 const records = ref<AssessmentRecord[]>([])
 const departments = ref<Department[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
@@ -172,6 +172,7 @@ function buildQuery(withPaging = true): AssessmentRecordQuery {
     detailDateTo: filters.detailDate || undefined,
     departmentIds: filters.departmentIds.length ? filters.departmentIds : undefined,
     name: filters.name.trim() || undefined,
+    reason: filters.reason.trim() || undefined,
     remark: filters.remark.trim() || undefined,
     status: (filters.status || undefined) as AssessmentStatus | undefined,
     sortBy: sortBy.value,
@@ -200,8 +201,15 @@ async function loadOptions() {
   paymentMethods.value = paymentMethodList
 }
 function query() { page.value = 1; void loadRecords() }
+function handleFilterEnter(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) || !target.closest('[data-filter-text]')) return
+  event.preventDefault()
+  query()
+}
 function reset() {
-  Object.assign(filters, { dates: [], detailDate: '', departmentIds: [], name: '', remark: '', status: '' })
+  Object.assign(filters, { dates: [], detailDate: '', departmentIds: [], name: '', reason: '', remark: '', status: '' })
   page.value = 1
   void loadRecords()
 }
@@ -622,14 +630,16 @@ onMounted(async () => {
   <div class="page-container">
     <PageTitle title="考核记录" subtitle="查询、整理与导出考核明细" :icon="Document" />
     <section class="card filter-card">
-      <el-form label-position="top" :model="filters"><div class="filter-grid">
+      <el-form label-position="top" :model="filters" @keydown.enter.capture="handleFilterEnter" @submit.prevent><div class="filter-grid">
         <el-form-item label="单据日期"><el-date-picker v-model="filters.dates" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
         <el-form-item label="录入日期"><el-date-picker v-model="filters.detailDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择录入日期" clearable /></el-form-item>
         <el-form-item label="部门"><el-select v-model="filters.departmentIds" placeholder="输入部门名称搜索" multiple clearable filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="1"><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
-        <el-form-item label="姓名"><el-input v-model="filters.name" placeholder="请输入姓名" @keyup.enter="query" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="filters.remark" placeholder="请输入备注关键字" clearable @keyup.enter="query" /></el-form-item>
+        <el-form-item label="姓名" data-filter-text><el-input v-model="filters.name" placeholder="请输入姓名" /></el-form-item>
+        <el-form-item label="事由" data-filter-text><el-input v-model="filters.reason" placeholder="请输入事由关键字" clearable /></el-form-item>
+        <el-form-item label="备注" data-filter-text><el-input v-model="filters.remark" placeholder="请输入备注关键字" clearable /></el-form-item>
         <el-form-item label="状态"><el-select v-model="filters.status" placeholder="全部" clearable><el-option label="已完成" value="Completed" /><el-option label="待处理" value="Pending" /></el-select></el-form-item>
-      </div><div class="filter-actions"><el-button type="primary" :icon="Search" @click="query">查询</el-button><el-button :icon="Refresh" @click="reset">重置</el-button><el-button :icon="Download" :loading="exporting" plain @click="exportExcel">导出 Excel</el-button><el-button type="primary" :icon="Plus" @click="openCreate">新增记录</el-button><el-button :icon="Upload" :loading="importing" plain @click="fileInput?.click()">导入 Excel</el-button><input ref="fileInput" class="file-input" type="file" accept=".xls,.xlsx,.xlsm" @change="importExcel" /></div></el-form>
+        <div class="filter-actions"><el-button type="primary" :icon="Search" @click="query">查询</el-button><el-button :icon="Refresh" @click="reset">重置</el-button><el-button :icon="Download" :loading="exporting" plain @click="exportExcel">导出 Excel</el-button><el-button type="primary" :icon="Plus" @click="openCreate">新增记录</el-button><el-button :icon="Upload" :loading="importing" plain @click="fileInput?.click()">导入 Excel</el-button><input ref="fileInput" class="file-input" type="file" accept=".xls,.xlsx,.xlsm" @change="importExcel" /></div>
+      </div></el-form>
     </section>
     <section class="card table-card">
       <div class="table-card__head"><h2>▤　考核记录 <small>共 {{ total }} 条记录</small></h2><el-button :icon="Refresh" :loading="loading" @click="loadRecords">刷新</el-button></div>
@@ -690,10 +700,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.filter-card { padding: 18px 22px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr .8fr .9fr .8fr; column-gap: 16px; }.filter-grid :deep(.el-form-item) { margin-bottom: 12px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }.filter-actions .el-button { min-width: 118px; margin: 0; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.records-table :deep(.el-table__body tr) { cursor: pointer; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }.pagination__summary { display: flex; align-items: center; gap: 20px; }.pagination__summary strong { color: var(--primary); font-size: 15px; }
+.filter-card { padding: 12px 18px; }.filter-card h2, .table-card h2 { margin: 0 0 14px; font-size: 17px; }.filter-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: 16px; row-gap: 2px; }.filter-grid > .el-form-item:nth-child(-n+4) { grid-column: span 3; }.filter-grid > .el-form-item:nth-child(n+5) { grid-column: span 2; }.filter-grid :deep(.el-form-item) { margin-bottom: 6px; }.filter-grid :deep(.el-form-item__label) { height: auto; margin-bottom: 3px; line-height: 18px; }.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; }.filter-actions { grid-column: span 6; display: flex; align-items: flex-end; justify-content: flex-end; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; }.filter-actions .el-button { min-width: 92px; height: 32px; margin: 0; padding: 0 8px; }.file-input { display: none; }.table-card { margin-top: 14px; padding: 16px; overflow-x: auto; }.table-card__head { display: flex; align-items: center; justify-content: space-between; }.table-card__head h2 { margin: 0; }.table-card small { margin-left: 8px; color: var(--primary); font-size: 13px; font-weight: 400; }.records-table :deep(.el-table__body tr) { cursor: pointer; }.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; color: var(--text-muted); font-size: 13px; }.pagination__summary { display: flex; align-items: center; gap: 20px; }.pagination__summary strong { color: var(--primary); font-size: 15px; }
 .record-form { padding: 2px 4px 0; }.record-form__grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }.record-form :deep(.el-select), .record-form :deep(.el-autocomplete), .record-form :deep(.el-date-editor), .record-form :deep(.el-input-number) { width: 100%; }
 .batch-add-checkbox { margin-right: 18px; }
 .import-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }.import-summary > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.import-summary span { color: var(--text-muted); font-size: 13px; }.import-section-title { margin: 14px 0 10px; font-size: 15px; }.import-section-title--error { color: var(--el-color-danger); }
-@media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.filter-grid > .el-form-item:nth-child(n) { grid-column: span 1; }.filter-actions { grid-column: 1 / -1; justify-content: flex-start; } }
 @media (max-width: 650px) { .filter-grid, .record-form__grid { grid-template-columns: 1fr; }.pagination { align-items: flex-start; flex-direction: column; gap: 12px; } }
 </style>

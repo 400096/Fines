@@ -48,6 +48,7 @@ export interface AssessmentRecordQuery {
   departmentId?: number
   departmentIds?: number[]
   name?: string
+  reason?: string
   remark?: string
   status?: AssessmentStatus
   sortBy?: 'assessmentDate' | 'detailDate' | 'departmentName' | 'personName' | 'amount'

@@ -13,6 +13,7 @@ public sealed class AssessmentRecordQuery
     public long? DepartmentId { get; set; }
     public List<long> DepartmentIds { get; set; } = [];
     public string? Name { get; set; }
+    [MaxLength(300)] public string? Reason { get; set; }
     [MaxLength(500)] public string? Remark { get; set; }
     public AssessmentStatus? Status { get; set; }
     [RegularExpression("^(assessmentDate|detailDate|departmentName|personName|amount)$")]
