@@ -292,9 +292,6 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         var firstDataRow = headerRow + 1;
         for (var i = 0; i < headers.Length; i++) worksheet.Cell(headerRow, i + 1).Value = headers[i];
 
-        DateOnly? previousDate = null;
-        long? previousDepartmentId = null;
-        var departmentGroupStartRow = firstDataRow;
         for (var i = 0; i < records.Count; i++)
         {
             var row = i + firstDataRow;
@@ -306,12 +303,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 worksheet.Cell(row, 1).Value = item.AssessmentDate.ToDateTime(TimeOnly.MinValue);
                 worksheet.Cell(row, 1).Style.DateFormat.Format = "yyyy/m/d";
             }
-            if (previousDate != item.AssessmentDate || previousDepartmentId != item.DepartmentId)
-            {
-                if (i > 0) MergeDepartmentCells(worksheet, departmentGroupStartRow, row - 1);
-                departmentGroupStartRow = row;
-                worksheet.Cell(row, 2).Value = item.Department.Name;
-            }
+            worksheet.Cell(row, 2).Value = item.Department.Name;
             worksheet.Cell(row, 3).Value = item.PersonName;
             if (AssessmentAmountFormatter.SplitPersonNames(item.PersonName).Count > 1)
                 worksheet.Cell(row, 4).Value = AssessmentAmountFormatter.Format(item.Amount, item.PersonName);
@@ -319,11 +311,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 worksheet.Cell(row, 4).Value = item.Amount;
             worksheet.Cell(row, 5).Value = item.Reason;
             worksheet.Cell(row, 6).Value = BuildExportRemark(item.Remark, item.PaymentMethod?.Name);
-            previousDate = item.AssessmentDate;
-            previousDepartmentId = item.DepartmentId;
         }
-        if (records.Count > 0)
-            MergeDepartmentCells(worksheet, departmentGroupStartRow, firstDataRow + records.Count - 1);
 
         var lastUsedRow = records.Count > 0 ? firstDataRow + records.Count - 1 : headerRow;
         var usedRange = worksheet.Range(1, 1, lastUsedRow, headers.Length);
@@ -378,15 +366,6 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
         using var output = new MemoryStream();
         workbook.SaveAs(output);
         return output.ToArray();
-    }
-
-    private static void MergeDepartmentCells(IXLWorksheet worksheet, int firstRow, int lastRow)
-    {
-        if (lastRow <= firstRow) return;
-        var range = worksheet.Range(firstRow, 2, lastRow, 2);
-        range.Merge();
-        range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
     }
 
     private static string? BuildExportRemark(string? remark, string? paymentMethodName)
