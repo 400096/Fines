@@ -1,6 +1,7 @@
 import http, { request } from './http'
 import type {
   AssessmentRecord,
+  AssessmentRecordDetail,
   AssessmentRecordQuery,
   CreateUser,
   DashboardResponse,
@@ -33,6 +34,9 @@ export const authApi = {
 export const assessmentApi = {
   list: (params: AssessmentRecordQuery) => request<PagedResult<AssessmentRecord>>({
     method: 'GET', url: '/assessment-records', params, paramsSerializer: { indexes: null },
+  }),
+  details: (id: number) => request<AssessmentRecordDetail>({
+    method: 'GET', url: `/assessment-records/${id}/details`,
   }),
   personNameSuggestions: (keyword: string, limit = 10) => request<string[]>({
     method: 'GET', url: '/assessment-records/person-name-suggestions', params: { keyword, limit },

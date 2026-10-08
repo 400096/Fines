@@ -80,6 +80,24 @@ public sealed record AssessmentRecordResponse(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
+/// <summary>一项字段变更的旧值和新值。</summary>
+public sealed record AssessmentFieldChangeResponse(string Field, string? Before, string? After);
+
+/// <summary>考核记录时间线中的一次操作。</summary>
+public sealed record AssessmentRecordChangeResponse(
+    long Id,
+    string Action,
+    string ActorName,
+    DateTime OccurredAt,
+    IReadOnlyList<AssessmentFieldChangeResponse> Changes);
+
+/// <summary>只读详情及最新变更时间线。</summary>
+public sealed record AssessmentRecordDetailResponse(
+    AssessmentRecordResponse Record,
+    bool IsDeleted,
+    bool HasEarlierUntrackedChanges,
+    IReadOnlyList<AssessmentRecordChangeResponse> Timeline);
+
 /// <summary>Excel 导入批次中的一条待确认数据。</summary>
 public sealed record ExcelStagedRow(
     long StagingId,

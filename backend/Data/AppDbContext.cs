@@ -11,6 +11,7 @@ namespace FineManagement.Api.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<AssessmentRecord> AssessmentRecords => Set<AssessmentRecord>();
+    public DbSet<AssessmentRecordChange> AssessmentRecordChanges => Set<AssessmentRecordChange>();
     public DbSet<AssessmentImportBatch> AssessmentImportBatches => Set<AssessmentImportBatch>();
     public DbSet<AssessmentImportRow> AssessmentImportRows => Set<AssessmentImportRow>();
     public DbSet<Department> Departments => Set<Department>();
@@ -118,6 +119,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(x => x.PaymentMethodId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.CreatedByUser).WithMany(x => x.CreatedAssessmentRecords)
                 .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<AssessmentRecordChange>(entity =>
+        {
+            entity.ToTable("AssessmentRecordChanges", table => table.HasComment("考核记录操作及字段变更历史表"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasComment("变更日志主键");
+            entity.Property(x => x.AssessmentRecordId).HasComment("所属考核记录主键");
+            entity.Property(x => x.Action).HasMaxLength(20).IsRequired().HasComment("操作类型：Created、Updated、Imported、Deleted");
+            entity.Property(x => x.ActorUserId).HasComment("操作用户主键快照");
+            entity.Property(x => x.ActorName).HasMaxLength(100).IsRequired().HasComment("操作人显示名称快照");
+            entity.Property(x => x.OccurredAt).HasComment("操作时间（UTC）");
+            entity.Property(x => x.ChangesJson).HasColumnType("longtext").IsRequired().HasComment("字段变更明细 JSON");
+            entity.HasIndex(x => new { x.AssessmentRecordId, x.OccurredAt });
+            entity.HasOne(x => x.Record).WithMany().HasForeignKey(x => x.AssessmentRecordId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AssessmentImportBatch>(entity =>

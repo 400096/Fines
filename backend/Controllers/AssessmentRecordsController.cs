@@ -5,6 +5,7 @@ using FineManagement.Api.DTOs.Assessments;
 using FineManagement.Api.DTOs.Common;
 using FineManagement.Api.Extensions;
 using FineManagement.Api.Services;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +82,31 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         return item is null ? NotFound() : Ok(ToResponse(item));
     }
 
+    /// <summary>获取只读详情和已记录的字段变更时间线；逻辑删除后仍可读取历史。</summary>
+    [HttpGet("{id:long}/details")]
+    public async Task<ActionResult<AssessmentRecordDetailResponse>> GetDetails(long id, CancellationToken cancellationToken)
+    {
+        var item = await db.AssessmentRecords.IgnoreQueryFilters().AsNoTracking()
+            .Include(x => x.Department)
+            .Include(x => x.PaymentMethod)
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (item is null) return NotFound();
+
+        var entries = await db.AssessmentRecordChanges.AsNoTracking()
+            .Where(x => x.AssessmentRecordId == id)
+            .OrderByDescending(x => x.OccurredAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(cancellationToken);
+        var timeline = entries.Select(x => new AssessmentRecordChangeResponse(
+            x.Id, x.Action, x.ActorName, DateTime.SpecifyKind(x.OccurredAt, DateTimeKind.Utc),
+            AssessmentChangeTracker.Read(x.ChangesJson)
+                .Select(change => new AssessmentFieldChangeResponse(change.Field, change.Before, change.After))
+                .ToList())).ToList();
+        var hasEarlierUntrackedChanges = !entries.Any(x => x.Action is "Created" or "Imported");
+        return Ok(new AssessmentRecordDetailResponse(ToResponse(item), item.IsDeleted,
+            hasEarlierUntrackedChanges, timeline));
+    }
+
     /// <summary>新增考核记录；收款方式可选，选择后记录自动变为已完成。</summary>
     [HttpPost]
     public async Task<ActionResult<AssessmentRecordResponse>> Create(CreateAssessmentRecordRequest request, CancellationToken cancellationToken)
@@ -119,6 +145,9 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             UpdatedAt = now
         };
         db.AssessmentRecords.Add(entity);
+        var createdFields = AssessmentChangeTracker.Capture(entity, department.Name, paymentMethod?.Name);
+        db.AssessmentRecordChanges.Add(AssessmentChangeTracker.Create(entity, "Created", User.GetUserId(),
+            CurrentActorName(), now, AssessmentChangeTracker.Diff(new Dictionary<string, string?>(), createdFields)));
         await db.SaveChangesAsync(cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, ToResponse(entity));
     }
@@ -145,6 +174,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
             if (paymentMethod is null) return BadRequest(new { message = "收款方式不存在或已停用" });
         }
 
+        var beforeFields = AssessmentChangeTracker.Capture(entity, entity.Department.Name, entity.PaymentMethod?.Name);
+
         entity.AssessmentDateType = request.AssessmentDateType;
         entity.AssessmentDate = request.AssessmentDate;
         entity.AssessmentEndDate = NormalizeEndDate(request.AssessmentDateType, request.AssessmentEndDate);
@@ -159,6 +190,11 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         entity.PaymentMethod = paymentMethod;
         entity.Status = paymentMethod is null ? AssessmentStatus.Pending : AssessmentStatus.Completed;
         entity.UpdatedAt = DateTime.UtcNow;
+        var afterFields = AssessmentChangeTracker.Capture(entity, department.Name, paymentMethod?.Name);
+        var changedFields = AssessmentChangeTracker.Diff(beforeFields, afterFields);
+        if (changedFields.Count > 0)
+            db.AssessmentRecordChanges.Add(AssessmentChangeTracker.Create(entity, "Updated", User.GetUserId(),
+                CurrentActorName(), entity.UpdatedAt, changedFields));
         await db.SaveChangesAsync(cancellationToken);
         return Ok(ToResponse(entity));
     }
@@ -169,6 +205,8 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     {
         var entity = await db.AssessmentRecords.FindAsync([id], cancellationToken);
         if (entity is null) return NotFound();
+        db.AssessmentRecordChanges.Add(AssessmentChangeTracker.Create(entity, "Deleted", User.GetUserId(),
+            CurrentActorName(), DateTime.UtcNow, []));
         db.AssessmentRecords.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
@@ -386,7 +424,12 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
         x.Id, x.AssessmentDateType, x.AssessmentDate, x.AssessmentEndDate, x.DetailDate,
         x.DepartmentId, x.Department.Name, x.PersonName, x.Amount,
         AssessmentAmountFormatter.Format(x.Amount, x.PersonName), x.Reason, x.Remark, x.Status,
-        x.PaymentMethodId, x.PaymentMethod?.Name, x.CreatedAt, x.UpdatedAt);
+        x.PaymentMethodId, x.PaymentMethod?.Name,
+        DateTime.SpecifyKind(x.CreatedAt, DateTimeKind.Utc),
+        DateTime.SpecifyKind(x.UpdatedAt, DateTimeKind.Utc));
+
+    private string CurrentActorName() =>
+        User.FindFirstValue(ClaimTypes.GivenName) ?? User.Identity?.Name ?? "未知用户";
 
     private async Task<AssessmentImportBatch?> FindPendingBatchAsync(long batchId, CancellationToken cancellationToken)
     {

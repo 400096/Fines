@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { assessmentApi, departmentApi, paymentMethodApi } from '@/api/services'
 import type { AssessmentDateType, AssessmentRecord, AssessmentRecordQuery, AssessmentStatus, Department, ExcelStagedRow, ExcelImportFailedRow, ExcelImportResult, PaymentMethod } from '@/api/types'
 import PageTitle from '@/components/PageTitle.vue'
+import AssessmentRecordDetailsDialog from '@/components/AssessmentRecordDetailsDialog.vue'
 import { formatMoney, todayString } from '@/utils/format'
 import { consumePendingImportFile } from '@/utils/importTransfer'
 
@@ -31,6 +32,8 @@ const sortOrder = ref<NonNullable<AssessmentRecordQuery['sortOrder']>>('descendi
 const selectedRecords = ref<AssessmentRecord[]>([])
 const selectedAmountTotal = computed(() => selectedRecords.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogVisible = ref(false)
+const detailsVisible = ref(false)
+const detailRecordId = ref<number | null>(null)
 const batchAdding = ref(false)
 const importResultVisible = ref(false)
 const lastImportResult = ref<ExcelImportResult | null>(null)
@@ -234,6 +237,10 @@ function toggleRowSelection(row: AssessmentRecord, _column: unknown, event: Even
   const target = event.target as HTMLElement
   if (target.closest('.el-checkbox, button, a')) return
   recordsTableRef.value?.toggleRowSelection(row)
+}
+function openDetails(row: AssessmentRecord) {
+  detailRecordId.value = row.id
+  detailsVisible.value = true
 }
 function openCreate() {
   departmentKeyword.value = ''
@@ -643,9 +650,10 @@ onMounted(async () => {
     </section>
     <section class="card table-card">
       <div class="table-card__head"><h2>▤　考核记录 <small>共 {{ total }} 条记录</small></h2><el-button :icon="Refresh" :loading="loading" @click="loadRecords">刷新</el-button></div>
-      <el-table ref="recordsTableRef" v-loading="loading" class="records-table" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort" @selection-change="changeSelection" @row-click="toggleRowSelection"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="120"><template #default="{ row }"><el-button link type="primary" @click.stop="openEdit(row)">编辑</el-button><el-button link type="danger" @click.stop="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
+      <el-table ref="recordsTableRef" v-loading="loading" class="records-table" :data="records" stripe border :default-sort="{ prop: sortBy, order: sortOrder }" @sort-change="changeSort" @selection-change="changeSelection" @row-click="toggleRowSelection"><el-table-column type="selection" width="44" /><el-table-column prop="assessmentDate" label="单据日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="190"><template #default="{ row }">{{ formatAssessmentDate(row) }}</template></el-table-column><el-table-column prop="detailDate" label="录入日期" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="135" /><el-table-column prop="departmentName" label="部门" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="110" /><el-table-column prop="personName" label="姓名" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="140" /><el-table-column prop="amount" label="金额（元）" sortable="custom" :sort-orders="['ascending', 'descending']" min-width="155"><template #default="{ row }">{{ row.amountDisplay }}</template></el-table-column><el-table-column prop="reason" label="事由" min-width="170" /><el-table-column prop="remark" label="备注" min-width="120" /><el-table-column label="状态" min-width="110"><template #default="{ row }"><el-tag :type="row.status === 'Completed' ? 'success' : 'warning'" round>{{ row.status === 'Completed' ? (row.paymentMethodName || '收款方式未设置') : '待处理' }}</el-tag></template></el-table-column><el-table-column label="操作" width="165"><template #default="{ row }"><el-button link type="primary" @click.stop="openDetails(row)">详情</el-button><el-button link type="primary" @click.stop="openEdit(row)">编辑</el-button><el-button link type="danger" @click.stop="removeRecord(row)">删除</el-button></template></el-table-column></el-table>
       <div class="pagination"><div class="pagination__summary"><span>已选 {{ selectedRecords.length }} 条数据，金额合计：<strong>¥{{ formatMoney(selectedAmountTotal) }}</strong></span></div><el-pagination v-model:current-page="page" v-model:page-size="pageSize" background layout="prev, pager, next, sizes" :total="total" @current-change="loadRecords" @size-change="changePageSize" /></div>
     </section>
+    <AssessmentRecordDetailsDialog v-model="detailsVisible" :record-id="detailRecordId" />
     <el-dialog v-model="dialogVisible" :title="addingFromImport ? (editingStagingId === null ? '添加待导入记录' : '编辑待导入记录') : (editingId === null ? '新增考核记录' : '编辑考核记录')" width="min(640px, 92vw)" destroy-on-close>
       <el-form ref="formRef" class="record-form" :model="recordForm" :rules="rules" label-position="top" @keyup.enter.capture="focusNextFormItem">
         <div class="record-form__grid">

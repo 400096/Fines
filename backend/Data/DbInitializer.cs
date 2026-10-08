@@ -15,6 +15,7 @@ public static class DbInitializer
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await EnsureAssessmentChangeSchemaAsync(db);
         await EnsureImportStagingSchemaAsync(db);
         await EnsureAssessmentDateSchemaAsync(db);
         await EnsureSoftDeleteSchemaAsync(db);
@@ -48,6 +49,27 @@ public static class DbInitializer
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsureAssessmentChangeSchemaAsync(AppDbContext db)
+    {
+        // EnsureCreated 不会为已有数据库补建新表，启动时幂等创建操作历史表。
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS `AssessmentRecordChanges`
+            (
+                `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '变更日志主键',
+                `AssessmentRecordId` BIGINT NOT NULL COMMENT '所属考核记录主键',
+                `Action` VARCHAR(20) NOT NULL COMMENT '操作类型：Created、Updated、Imported、Deleted',
+                `ActorUserId` BIGINT NULL COMMENT '操作用户主键快照',
+                `ActorName` VARCHAR(100) NOT NULL COMMENT '操作人显示名称快照',
+                `OccurredAt` DATETIME(6) NOT NULL COMMENT '操作时间（UTC）',
+                `ChangesJson` LONGTEXT NOT NULL COMMENT '字段变更明细 JSON',
+                PRIMARY KEY (`Id`),
+                CONSTRAINT `FK_AssessmentRecordChanges_Records` FOREIGN KEY (`AssessmentRecordId`)
+                    REFERENCES `AssessmentRecords` (`Id`) ON DELETE RESTRICT,
+                KEY `IX_AssessmentRecordChanges_AssessmentRecordId_OccurredAt` (`AssessmentRecordId`, `OccurredAt`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='考核记录操作及字段变更历史表'
+            """);
     }
 
     private static async Task EnsureSoftDeleteSchemaAsync(AppDbContext db)

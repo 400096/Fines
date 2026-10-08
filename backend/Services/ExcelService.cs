@@ -160,6 +160,14 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
 
         var createdDepartments = new List<string>();
         var confirmedAt = DateTime.UtcNow;
+        var actorName = userId.HasValue
+            ? await db.Users.IgnoreQueryFilters().AsNoTracking()
+                .Where(x => x.Id == userId.Value)
+                .Select(x => x.Name)
+                .SingleOrDefaultAsync(cancellationToken) ?? "未知用户"
+            : "未知用户";
+        var paymentMethodNames = await db.PaymentMethods.IgnoreQueryFilters().AsNoTracking()
+            .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
         foreach (var row in batch.Rows)
         {
             Department? department = null;
@@ -197,7 +205,7 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 createdDepartments.Add($"{department.Name}（已恢复）");
             }
 
-            db.AssessmentRecords.Add(new AssessmentRecord
+            var record = new AssessmentRecord
             {
                 AssessmentDateType = row.AssessmentDateType,
                 AssessmentDate = row.AssessmentDate,
@@ -213,7 +221,13 @@ public sealed class ExcelService(AppDbContext db) : IExcelService
                 CreatedByUserId = userId,
                 CreatedAt = confirmedAt,
                 UpdatedAt = confirmedAt
-            });
+            };
+            db.AssessmentRecords.Add(record);
+            var paymentMethodName = row.PaymentMethodId.HasValue &&
+                paymentMethodNames.TryGetValue(row.PaymentMethodId.Value, out var name) ? name : null;
+            var fields = AssessmentChangeTracker.Capture(record, department.Name, paymentMethodName);
+            db.AssessmentRecordChanges.Add(AssessmentChangeTracker.Create(record, "Imported", userId,
+                actorName, confirmedAt, AssessmentChangeTracker.Diff(new Dictionary<string, string?>(), fields)));
         }
 
         batch.Status = AssessmentImportStatus.Confirmed;

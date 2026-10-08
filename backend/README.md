@@ -43,6 +43,7 @@ dotnet run
 | GET | `/api/dashboard` | 首页数据汇总、趋势、事由占比与最近记录 |
 | GET/POST | `/api/assessment-records` | 查询、新增考核记录 |
 | GET/PUT/DELETE | `/api/assessment-records/{id}` | 详情、编辑、删除考核记录 |
+| GET | `/api/assessment-records/{id}/details` | 只读详情与字段变更时间线 |
 | POST | `/api/assessment-records/import` | 导入 Excel |
 | GET | `/api/assessment-records/export` | 导出 Excel |
 | GET/POST | `/api/departments` | 部门查询、新增 |
@@ -76,3 +77,4 @@ dotnet run
 - 已被考核记录引用的部门和收款方式不能直接删除，可改为停用。
 - 系统始终保留至少一个启用的超级管理员。
 - 考核记录、部门、收款方式和用户的删除操作均为逻辑删除；数据会标记 `IsDeleted=true` 并记录 `DeletedAt`，正常查询不会返回已删除数据。
+- 考核记录新增、编辑、Excel 确认导入和删除会写入 `AssessmentRecordChanges`，与正式记录在同一次数据库提交中保存。已有记录在本功能上线前的修改明细无法追溯。

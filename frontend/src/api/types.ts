@@ -40,6 +40,27 @@ export interface AssessmentRecord {
   updatedAt: string
 }
 
+export interface AssessmentFieldChange {
+  field: string
+  before: string | null
+  after: string | null
+}
+
+export interface AssessmentRecordChange {
+  id: number
+  action: 'Created' | 'Updated' | 'Imported' | 'Deleted'
+  actorName: string
+  occurredAt: string
+  changes: AssessmentFieldChange[]
+}
+
+export interface AssessmentRecordDetail {
+  record: AssessmentRecord
+  isDeleted: boolean
+  hasEarlierUntrackedChanges: boolean
+  timeline: AssessmentRecordChange[]
+}
+
 export interface AssessmentRecordQuery {
   dateFrom?: string
   dateTo?: string

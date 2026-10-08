@@ -66,6 +66,31 @@ ALTER TABLE `AssessmentRecords`
     MODIFY COLUMN `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记：1已删除，0正常',
     MODIFY COLUMN `DeletedAt` DATETIME(6) NULL COMMENT '逻辑删除时间（UTC）';
 
+CREATE TABLE IF NOT EXISTS `AssessmentRecordChanges`
+(
+    `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '变更日志主键',
+    `AssessmentRecordId` BIGINT NOT NULL COMMENT '所属考核记录主键',
+    `Action` VARCHAR(20) NOT NULL COMMENT '操作类型：Created、Updated、Imported、Deleted',
+    `ActorUserId` BIGINT NULL COMMENT '操作用户主键快照',
+    `ActorName` VARCHAR(100) NOT NULL COMMENT '操作人显示名称快照',
+    `OccurredAt` DATETIME(6) NOT NULL COMMENT '操作时间（UTC）',
+    `ChangesJson` LONGTEXT NOT NULL COMMENT '字段变更明细 JSON',
+    PRIMARY KEY (`Id`),
+    CONSTRAINT `FK_AssessmentRecordChanges_Records`
+        FOREIGN KEY (`AssessmentRecordId`) REFERENCES `AssessmentRecords` (`Id`) ON DELETE RESTRICT,
+    KEY `IX_AssessmentRecordChanges_AssessmentRecordId_OccurredAt` (`AssessmentRecordId`, `OccurredAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='考核记录操作及字段变更历史表';
+
+ALTER TABLE `AssessmentRecordChanges`
+    COMMENT = '考核记录操作及字段变更历史表',
+    MODIFY COLUMN `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '变更日志主键',
+    MODIFY COLUMN `AssessmentRecordId` BIGINT NOT NULL COMMENT '所属考核记录主键',
+    MODIFY COLUMN `Action` VARCHAR(20) NOT NULL COMMENT '操作类型：Created、Updated、Imported、Deleted',
+    MODIFY COLUMN `ActorUserId` BIGINT NULL COMMENT '操作用户主键快照',
+    MODIFY COLUMN `ActorName` VARCHAR(100) NOT NULL COMMENT '操作人显示名称快照',
+    MODIFY COLUMN `OccurredAt` DATETIME(6) NOT NULL COMMENT '操作时间（UTC）',
+    MODIFY COLUMN `ChangesJson` LONGTEXT NOT NULL COMMENT '字段变更明细 JSON';
+
 ALTER TABLE `AssessmentImportBatches`
     COMMENT = 'Excel 导入批次表',
     MODIFY COLUMN `Id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '导入批次主键',
