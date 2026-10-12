@@ -203,11 +203,16 @@ public class AssessmentRecordsController(AppDbContext db, IExcelService excelSer
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
-        var entity = await db.AssessmentRecords.FindAsync([id], cancellationToken);
+        var entity = await db.AssessmentRecords.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (entity is null) return NotFound();
+
+        // 直接更新逻辑删除字段，避免把存在必需变更日志关联的记录标记为 EF Deleted 状态。
+        var deletedAt = DateTime.UtcNow;
+        entity.IsDeleted = true;
+        entity.DeletedAt = deletedAt;
+        entity.UpdatedAt = deletedAt;
         db.AssessmentRecordChanges.Add(AssessmentChangeTracker.Create(entity, "Deleted", User.GetUserId(),
-            CurrentActorName(), DateTime.UtcNow, []));
-        db.AssessmentRecords.Remove(entity);
+            CurrentActorName(), deletedAt, []));
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
